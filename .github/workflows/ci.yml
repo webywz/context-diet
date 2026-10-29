@@ -21,11 +21,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run typecheck
       - run: npm run build
       - name: Smoke the CLI
         run: |
           node dist/cli.js --help
           node dist/cli.js --version
+          test -x dist/cli.js
+          head -n1 dist/cli.js | grep -qx '#!/usr/bin/env node'
           node dist/cli.js examples/noisy.txt --json --keep 'headings|code|lists' --max-tokens 400 > /tmp/diet.json
           node -e "
             const j = require('/tmp/diet.json');
@@ -33,3 +36,39 @@ jobs:
             if (j.output.tokens > 400) process.exit(1);
             console.log('ok', j.input.tokens, '->', j.output.tokens);
           "
+      - name: Verify npm pack keeps the CLI bin
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            if (pkg.bin["context-diet"] !== "dist/cli.js") process.exit(1);
+            if (pkg.publishConfig.access !== "public") process.exit(1);
+          '
+          tarball=$(npm pack --silent)
+          node -e '
+            const { execFileSync } = require("child_process");
+            const tarball = process.argv[1];
+            const packed = JSON.parse(
+              execFileSync("tar", ["-xOf", tarball, "package/package.json"], { encoding: "utf8" }),
+            );
+            if (!packed.bin || packed.bin["context-diet"] !== "dist/cli.js") {
+              console.error("packed bin dropped or wrong:", packed.bin);
+              process.exit(1);
+            }
+            const listing = execFileSync("tar", ["-tvf", tarball], { encoding: "utf8" });
+            const line = listing.split("\n").find((row) => /package\/dist\/cli\.js$/.test(row));
+            if (!line || !line.startsWith("-rwx")) {
+              console.error("packed dist/cli.js is not executable:", line);
+              process.exit(1);
+            }
+            const shebang = execFileSync("tar", ["-xOf", tarball, "package/dist/cli.js"], {
+              encoding: "utf8",
+            }).split("\n")[0];
+            if (shebang !== "#!/usr/bin/env node") {
+              console.error("packed shebang wrong:", shebang);
+              process.exit(1);
+            }
+            console.log("ok", packed.bin, line.split(/\s+/)[0]);
+          ' "$tarball"
+          rm -f "$tarball"
