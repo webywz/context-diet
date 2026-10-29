@@ -1,0 +1,44 @@
+[2026-03-14 09:01:02] INFO Starting request handler
+[2026-03-14 09:01:02] DEBUG loading config from /etc/app/config.yaml
+[2026-03-14 09:01:03] DEBUG loading config from /etc/app/config.yaml
+[2026-03-14 09:01:03] DEBUG loading config from /etc/app/config.yaml
+[2026-03-14 09:01:03] DEBUG loading config from /etc/app/config.yaml
+[2026-03-14 09:01:04] INFO Starting request handler
+[2026-03-14 09:01:04] INFO Starting request handler
+[2026-03-14 09:01:05] ERROR Cannot connect to redis://cache:6379
+[2026-03-14 09:01:05] DEBUG retrying connection
+[2026-03-14 09:01:06] DEBUG retrying connection
+[2026-03-14 09:01:07] DEBUG retrying connection
+[2026-03-14 09:01:08] ERROR Cannot connect to redis://cache:6379
+
+
+============================================================
+ CONFIDENTIALITY NOTICE
+ This email is confidential and intended only for the recipient.
+============================================================
+
+# Deploy runbook
+
+The deploy runbook covers staging and production.
+
+The deploy runbook covers staging and production rollouts.
+
+Staging uses the same image as production. Set `DATABASE_URL` and `REDIS_URL`.
+
+Staging uses the same image as production.  Set DATABASE_URL and REDIS_URL.
+
+## Rollback
+
+- Tag the previous image
+- Run `kubectl rollout undo deploy/api`
+- Confirm `/healthz` returns 200
+
+```ts
+export function healthz(): { ok: true } {
+  return { ok: true };
+}
+```
+
+Sent from my iPhone
+
+data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/==

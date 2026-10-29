@@ -1,0 +1,60 @@
+{
+  "name": "@webywz/context-diet",
+  "version": "0.1.0",
+  "description": "Slim LLM context before you send it — drop noise, keep the signal, estimate tokens.",
+  "keywords": [
+    "llm",
+    "context",
+    "tokens",
+    "prompt",
+    "cli",
+    "openai",
+    "anthropic",
+    "tiktoken"
+  ],
+  "homepage": "https://github.com/webywz/context-diet#readme",
+  "bugs": {
+    "url": "https://github.com/webywz/context-diet/issues"
+  },
+  "license": "MIT",
+  "author": "webywz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webywz/context-diet.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "context-diet": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/cli.ts",
+    "prepublishOnly": "npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "tsx": "^4.23.15",
+    "typescript": "^5.8.3"
+  }
+}
