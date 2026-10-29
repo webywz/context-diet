@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Smoke the CLI
+        run: |
+          node dist/cli.js --help
+          node dist/cli.js --version
+          node dist/cli.js examples/noisy.txt --json --keep 'headings|code|lists' --max-tokens 400 > /tmp/diet.json
+          node -e "
+            const j = require('/tmp/diet.json');
+            if (!j.ok || !j.text.includes('healthz')) process.exit(1);
+            if (j.output.tokens > 400) process.exit(1);
+            console.log('ok', j.input.tokens, '->', j.output.tokens);
+          "
