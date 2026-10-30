@@ -41,7 +41,7 @@ cut:
 | | |
 | --- | --- |
 | **Offline heuristics** | Strip ANSI/HTML chrome, drop boilerplate, dedupe, omit base64 blobs |
-| **Presets** | `logs`, `email`, `chat`, `html` — sensible keep/strip defaults |
+| **Presets** | `logs`, `email`, `chat`, `html`, `code`, `json` — sensible keep/strip defaults |
 | **Budget** | `--max-tokens` drops low-value blocks first; `--keep` pins headings/code/lists |
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
@@ -82,6 +82,8 @@ context-diet examples/noisy.txt --keep headings|code|lists
 | `email` | `headings`, `lists` | Quoted replies (`>` / `On … wrote:` / Original Message) |
 | `chat` | `code`, `lists` | Reactions, join/leave, lone timestamps |
 | `html` | `headings`, `code`, `lists` | `<script>` / `<style>` / comments / tags → prose |
+| `code` | `code` | Long comments / blank runs; prefer signatures when truncating |
+| `json` | `code` | JSONC comments out; drop `null` / `""`; stable pretty-compact |
 
 Explicit `--keep` always wins over the preset default.
 
@@ -115,7 +117,7 @@ context-diet [file] [options]
 | `--html <path>` | Write self-contained HTML report (stats + capped previews) |
 | `--max-tokens <n>` | Cap estimated output tokens |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
-| `--preset <name>` | `logs` \| `email` \| `chat` \| `html` |
+| `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
 | `--demo` | Diet bundled `examples/noisy.txt` |
 | `--json` | JSON report on stdout |
 | `--dry-run` | Report only; no body / no `-o` write |
@@ -211,7 +213,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | | |
 | --- | --- |
 | **离线启发式** | 剥 ANSI/HTML、去样板、去重、省略 base64 大块 |
-| **预设** | `logs` / `email` / `chat` / `html` |
+| **预设** | `logs` / `email` / `chat` / `html` / `code` / `json` |
 | **预算** | `--max-tokens` 优先丢掉低价值块；`--keep` 钉住标题/代码/列表 |
 | **管道友好** | 正文 → stdout；报告 → stderr |
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
@@ -248,6 +250,8 @@ context-diet examples/noisy.txt --keep headings|code|lists
 | `email` | `headings`, `lists` | 引用回复（`>` / `On … wrote:` / Original Message） |
 | `chat` | `code`, `lists` | 表情反应、进出房系统行、孤立时间戳 |
 | `html` | `headings`, `code`, `lists` | `<script>` / `<style>` / 注释 / 标签 → 纯文本 |
+| `code` | `code` | 长注释 / 多余空行；截断时优先签名行 |
+| `json` | `code` | 去 JSONC 注释；丢 `null` / `""`；稳定 pretty-compact |
 
 显式 `--keep` 始终覆盖预设默认。
 
@@ -277,7 +281,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `--html <path>` | 写入自包含 HTML 报告（统计 + 截断预览） |
 | `--max-tokens <n>` | 估算输出 token 上限 |
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
-| `--preset <name>` | `logs` \| `email` \| `chat` \| `html` |
+| `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
 | `--demo` | 对包内 `examples/noisy.txt` 瘦身 |
 | `--json` | stdout 输出 JSON 报告 |
 | `--dry-run` | 只报告，不写正文 |

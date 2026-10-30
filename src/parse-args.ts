@@ -92,7 +92,7 @@ Options:
       --max-tokens <n>      Truncate to an estimated token budget
       --keep <cats>         Prefer headings, code, lists when truncating
                             (comma or pipe: headings|code|lists)
-      --preset <name>       logs | email | chat | html
+      --preset <name>       logs | email | chat | html | code | json
                             (sets keep defaults + extra strippers)
       --demo                Diet the bundled examples/noisy.txt (no clone needed)
       --json                Print a machine-readable report (includes text)
@@ -224,7 +224,7 @@ export function parseArgs(argv: string[]): CliArgs {
       const name = got.value.toLowerCase();
       if (!isPresetName(name)) {
         throw new UsageError(
-          `Unknown --preset "${got.value}". Use logs, email, chat, or html.`,
+          `Unknown --preset "${got.value}". Use logs, email, chat, html, code, or json.`,
         );
       }
       args.preset = name;

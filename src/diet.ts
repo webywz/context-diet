@@ -4,6 +4,7 @@ import {
   stripAnsi,
   tidy,
 } from "./heuristics.js";
+import { stripCodeNoise, stripJsonNoise } from "./strip-code-json.js";
 import { stripHtmlChrome } from "./html.js";
 import { deepenText } from "./llm.js";
 import { resolvePreset } from "./presets.js";
@@ -31,6 +32,12 @@ function localDiet(text: string, options: DietOptions): DietResult {
     stripChatChrome: resolved.stripChatChrome,
   });
 
+  if (resolved.stripJsonNoise) {
+    next = stripJsonNoise(next, cuts);
+  } else if (resolved.stripCodeNoise) {
+    next = stripCodeNoise(next, cuts);
+  }
+
   if (options.maxTokens && options.maxTokens > 0) {
     const blocks = parseBlocks(next);
     const trimmed = truncateToBudget(
@@ -39,6 +46,7 @@ function localDiet(text: string, options: DietOptions): DietResult {
       resolved.keep,
       cuts,
       resolved.preferErrors,
+      resolved.stripCodeNoise,
     );
     next = joinBlocks(trimmed);
   }
