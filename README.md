@@ -9,7 +9,7 @@ npm i -g @webywz/context-diet
 ```
 
 ```bash
-context-diet logs.txt --max-tokens 2000 --keep headings|code
+context-diet logs.txt --preset logs --max-tokens 2000
 ```
 
 ## Install
@@ -32,14 +32,28 @@ npx @webywz/context-diet --help
 context-diet input.txt
 
 # stdin
-cat noisy.log | context-diet --max-tokens 1500 > slim.txt
+cat noisy.log | context-diet --preset logs --max-tokens 1500 > slim.txt
 
 # write the body to a file
 context-diet notes.md -o slim.md --keep headings,code,lists
 
+# report only (no body / no -o write)
+context-diet input.txt --dry-run --diff
+
 # machine-readable
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
 ```
+
+### Presets
+
+| Preset | Keeps by default | Extra strippers |
+| --- | --- | --- |
+| `logs` | `code` | Prefer `ERROR`/`WARN`/`FATAL` when truncating |
+| `email` | `headings`, `lists` | Quoted replies (`>` / `On … wrote:` / Original Message) |
+| `chat` | `code`, `lists` | Reactions, join/leave system lines, lone timestamps |
+| `html` | `headings`, `code`, `lists` | `<script>` / `<style>` / comments / tags → prose |
+
+Explicit `--keep` always wins over the preset default.
 
 ### Before / after
 
@@ -48,19 +62,11 @@ Input (`examples/noisy.txt`) — repeated logs, a duplicated runbook, a signatur
 ```
 [2026-03-14 09:01:02] INFO Starting request handler
 [2026-03-14 09:01:02] DEBUG loading config from /etc/app/config.yaml
-[2026-03-14 09:01:03] DEBUG loading config from /etc/app/config.yaml
-[2026-03-14 09:01:03] DEBUG loading config from /etc/app/config.yaml
 …
 CONFIDENTIALITY NOTICE
-This email is confidential and intended only for the recipient.
 …
-
-The deploy runbook covers staging and production.
-The deploy runbook covers staging and production rollouts.
-…
-
 Sent from my iPhone
-data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAY…   (huge)
+data:image/png;base64,iVBORw0KGgo…   (huge)
 ```
 
 ```bash
@@ -70,12 +76,15 @@ context-diet examples/noisy.txt --keep headings|code|lists
 Stderr:
 
 ```
-context-diet 0.1.0
+context-diet 0.2.0
 source:   examples/noisy.txt
 chars:    1,666 → 834  (−49.9%)
 tokens:   ~667 → ~312  (−53.2%)
 cut:
   ansi sequences        0
+  html chrome           0
+  quoted replies        0
+  chat chrome           0
   boilerplate lines     9
   duplicate paragraphs  2
   whitespace runs       5
@@ -94,11 +103,14 @@ All of this is **offline heuristics**. No network unless you pass `--deepen`.
 | Step | Behavior |
 | --- | --- |
 | Strip ANSI | Terminal color / OSC sequences |
+| Strip HTML | Optional / `--preset html`: scripts, styles, comments, tags |
 | Omit heavy blobs | Long base64 / data-URIs → `[omitted blob: N chars]` |
 | Collapse whitespace | Trailing space, squeezed blanks — **never inside code fences** |
 | Drop boilerplate | Repeated log lines (timestamps/UUIDs normalized), signatures, `DEBUG` chrome, horizontal rules |
-| Dedupe paragraphs | Exact and near-identical (Jaccard ≥ 0.87) prose/list blocks |
-| Truncate | `--max-tokens N` drops low-value blocks first; `--keep headings\|code\|lists` pins those types |
+| Drop quoted replies | `--preset email`: `>` quotes, `On … wrote:`, Original Message tails |
+| Drop chat chrome | `--preset chat`: reactions, join/leave, lone timestamps |
+| Dedupe paragraphs | Exact and near-identical (Jaccard ≥ 0.84) prose/list blocks |
+| Truncate | `--max-tokens N` drops low-value blocks first; `--keep` / presets pin types; `logs` also prefers error lines |
 
 Token estimates are **cl100k-ish** (GPT-4 family grain: ~4 chars/word, 1 CJK char ≈ 1 token, punctuation is dense). Good enough to budget a prompt. Not a billed tokenizer — do not invoice with it.
 
@@ -114,7 +126,10 @@ context-diet [file] [options]
 | `-o, --output <file>` | Write slimmed text here instead of stdout |
 | `--max-tokens <n>` | Cap estimated output tokens |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
-| `--json` | JSON report on stdout (includes `text`, unless `-o` was set) |
+| `--preset <name>` | `logs` \| `email` \| `chat` \| `html` |
+| `--json` | JSON report on stdout (includes `text`, unless `-o` / `--dry-run`) |
+| `--dry-run` | Report only; do not emit slimmed body or write `-o` |
+| `--diff` | Show removed lines on stderr (capped) |
 | `--deepen` | Optional LLM rewrite (see below) |
 | `--provider openai\|anthropic` | Force a provider for `--deepen` |
 | `-q, --quiet` | No human report on stderr |
@@ -124,8 +139,10 @@ context-diet [file] [options]
 Default I/O: **slimmed body on stdout**, **human report on stderr**, so this stays pipe-friendly:
 
 ```bash
-pbpaste | context-diet --max-tokens 800 --keep code | pbcopy
+pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
 ```
+
+The human report respects `NO_COLOR` / `FORCE_COLOR`.
 
 ## Optional LLM pass
 
@@ -145,7 +162,8 @@ import { diet, dietAsync, estimateTokens } from "@webywz/context-diet";
 
 const { text, input, output, cuts } = diet(raw, {
   maxTokens: 2000,
-  keep: ["headings", "code"],
+  preset: "logs",
+  keep: ["code"], // optional override
 });
 
 await dietAsync(raw, { deepen: true }); // keys from process.env

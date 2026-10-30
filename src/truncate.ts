@@ -2,7 +2,53 @@ import { joinBlocks, type Block } from "./blocks.js";
 import { estimateTokens } from "./tokens.js";
 import type { CutCounts, KeepCategory } from "./types.js";
 
-function scoreBlock(block: Block, keep: Set<KeepCategory>): number {
+const ERROR_LINE_RE = /\b(ERROR|FATAL|CRITICAL|WARN(?:ING)?|SEVERE|PANIC|EXCEPTION)\b/i;
+
+function looksLikeError(block: Block): boolean {
+  if (block.type === "code" || block.type === "blank" || block.type === "rule") {
+    return false;
+  }
+  return ERROR_LINE_RE.test(block.raw);
+}
+
+const LOG_LINE_RE =
+  /^\s*(?:\[[^\]]+\]|\d{4}-\d{2}-\d{2})\s+(?:DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|TRACE|CRITICAL)\b/i;
+
+/**
+ * When preferring errors, explode multi-line log paragraphs into one block
+ * per line so ERROR/WARN can outrank neighboring INFO/DEBUG under a budget.
+ */
+function explodeLogParagraphs(blocks: Block[], preferErrors: boolean): Block[] {
+  if (!preferErrors) return blocks;
+  const out: Block[] = [];
+  for (const block of blocks) {
+    if (block.type !== "paragraph") {
+      out.push(block);
+      continue;
+    }
+    const lines = block.raw.split("\n");
+    if (lines.length < 2) {
+      out.push(block);
+      continue;
+    }
+    const loggish = lines.filter((l) => l.trim() !== "").every((l) => LOG_LINE_RE.test(l) || ERROR_LINE_RE.test(l));
+    if (!loggish) {
+      out.push(block);
+      continue;
+    }
+    for (const line of lines) {
+      if (line.trim() === "") continue;
+      out.push({ type: "paragraph", raw: line });
+    }
+  }
+  return out;
+}
+
+function scoreBlock(
+  block: Block,
+  keep: Set<KeepCategory>,
+  preferErrors: boolean,
+): number {
   let score = 1;
   switch (block.type) {
     case "heading":
@@ -29,7 +75,7 @@ function scoreBlock(block: Block, keep: Set<KeepCategory>): number {
     default:
       score = 1;
   }
-  // Prefer earlier context when scores tie.
+  if (preferErrors && looksLikeError(block)) score += 18;
   return score;
 }
 
@@ -63,14 +109,16 @@ export function truncateToBudget(
   maxTokens: number,
   keep: KeepCategory[],
   cuts: CutCounts,
+  preferErrors = false,
 ): Block[] {
   if (!(maxTokens > 0)) return blocks;
+  blocks = explodeLogParagraphs(blocks, preferErrors);
   const keepSet = new Set(keep);
   const tokens = blocks.map((b) => estimateTokens(b.raw));
   let total = tokens.reduce((a, b) => a + b, 0);
   if (total <= maxTokens) return blocks;
 
-  const scores = blocks.map((b) => scoreBlock(b, keepSet));
+  const scores = blocks.map((b) => scoreBlock(b, keepSet, preferErrors));
   const order = blocks
     .map((_, i) => i)
     .sort((a, b) => {
@@ -106,7 +154,12 @@ export function truncateToBudget(
 
   // Still over: trim the lowest-score, largest remaining block from the end.
   const trimOrder = next
-    .map((b, i) => ({ i, b, s: scoreBlock(b, keepSet), t: estimateTokens(b.raw) }))
+    .map((b, i) => ({
+      i,
+      b,
+      s: scoreBlock(b, keepSet, preferErrors),
+      t: estimateTokens(b.raw),
+    }))
     .filter((x) => x.b.type !== "blank")
     .sort((a, b) => a.s - b.s || b.t - a.t || b.i - a.i);
 

@@ -15,6 +15,10 @@ export interface JsonReport {
   text: string;
 }
 
+export interface ReportStyle {
+  color: boolean;
+}
+
 function pct(before: number, after: number): number {
   if (before <= 0) return 0;
   return Math.round(((before - after) / before) * 1000) / 10;
@@ -22,6 +26,28 @@ function pct(before: number, after: number): number {
 
 function commas(n: number): string {
   return n.toLocaleString("en-US");
+}
+
+const ansi = {
+  dim: (s: string, on: boolean) => (on ? `\u001b[2m${s}\u001b[0m` : s),
+  green: (s: string, on: boolean) => (on ? `\u001b[32m${s}\u001b[0m` : s),
+  red: (s: string, on: boolean) => (on ? `\u001b[31m${s}\u001b[0m` : s),
+  bold: (s: string, on: boolean) => (on ? `\u001b[1m${s}\u001b[0m` : s),
+};
+
+/**
+ * Respect NO_COLOR / FORCE_COLOR (https://no-color.org/).
+ * When streamIsTTY is false and FORCE_COLOR is unset, stay plain.
+ */
+export function shouldUseColor(
+  env: NodeJS.ProcessEnv = process.env,
+  streamIsTTY?: boolean,
+): boolean {
+  if (env.NO_COLOR !== undefined && env.NO_COLOR !== "") return false;
+  if (env.FORCE_COLOR !== undefined) {
+    return env.FORCE_COLOR !== "" && env.FORCE_COLOR !== "0";
+  }
+  return Boolean(streamIsTTY);
 }
 
 export function toJsonReport(result: DietResult, source: string): JsonReport {
@@ -43,9 +69,12 @@ export function toJsonReport(result: DietResult, source: string): JsonReport {
   };
 }
 
-function cutLines(cuts: CutCounts): string[] {
-  const rows: Array<[string, string]> = [
+function cutLines(cuts: CutCounts): Array<[string, string]> {
+  return [
     ["ansi sequences", String(cuts.ansiSequences)],
+    ["html chrome", String(cuts.htmlChrome)],
+    ["quoted replies", String(cuts.quotedReplies)],
+    ["chat chrome", String(cuts.chatChrome)],
     ["boilerplate lines", String(cuts.boilerplateLines)],
     ["duplicate paragraphs", String(cuts.duplicateParagraphs)],
     ["whitespace runs", String(cuts.whitespaceRuns)],
@@ -54,28 +83,76 @@ function cutLines(cuts: CutCounts): string[] {
     ["truncated tokens", `~${commas(cuts.truncatedTokens)}`],
     ["llm deepen", cuts.deepened ? "yes" : "no"],
   ];
-  const width = Math.max(...rows.map(([k]) => k.length));
-  return rows.map(
-    ([k, v]) => `  ${k.padEnd(width)}  ${v}`,
-  );
 }
 
 export function formatHumanReport(
   result: DietResult,
   source: string,
   version: string,
+  style: ReportStyle = { color: false },
 ): string {
   const { input, output } = result;
   const charPct = pct(input.chars, output.chars);
   const tokPct = pct(input.tokens, output.tokens);
   const sign = (n: number) => (n > 0 ? `−${n}%` : n < 0 ? `+${Math.abs(n)}%` : "0%");
+  const on = style.color;
+  const rows = cutLines(result.cuts);
+  const width = Math.max(...rows.map(([k]) => k.length));
+  const cutBody = rows.map(
+    ([k, v]) => `  ${ansi.dim(k.padEnd(width), on)}  ${v}`,
+  );
   const lines = [
-    `context-diet ${version}`,
+    ansi.bold(`context-diet ${version}`, on),
     `source:   ${source}`,
-    `chars:    ${commas(input.chars)} → ${commas(output.chars)}  (${sign(charPct)})`,
-    `tokens:   ~${commas(input.tokens)} → ~${commas(output.tokens)}  (${sign(tokPct)})`,
+    `chars:    ${commas(input.chars)} → ${commas(output.chars)}  (${ansi.green(sign(charPct), on)})`,
+    `tokens:   ~${commas(input.tokens)} → ~${commas(output.tokens)}  (${ansi.green(sign(tokPct), on)})`,
     `cut:`,
-    ...cutLines(result.cuts),
+    ...cutBody,
   ];
   return lines.join("\n") + "\n";
+}
+
+const DIFF_CAP = 40;
+
+/**
+ * Show lines that disappeared after the diet (order-preserving multiset
+ * difference). Caps output so huge logs stay readable.
+ */
+export function formatRemovedDiff(
+  input: string,
+  output: string,
+  style: ReportStyle = { color: false },
+): string {
+  const inLines = input.split("\n");
+  const outCounts = new Map<string, number>();
+  for (const line of output.split("\n")) {
+    outCounts.set(line, (outCounts.get(line) ?? 0) + 1);
+  }
+
+  const removed: string[] = [];
+  for (const line of inLines) {
+    const left = outCounts.get(line) ?? 0;
+    if (left > 0) {
+      outCounts.set(line, left - 1);
+      continue;
+    }
+    // Skip pure blank noise in the diff view.
+    if (line.trim() === "") continue;
+    removed.push(line);
+  }
+
+  if (removed.length === 0) {
+    return style.color
+      ? `\u001b[2mdiff: no unique lines removed\u001b[0m\n`
+      : `diff: no unique lines removed\n`;
+  }
+
+  const shown = removed.slice(0, DIFF_CAP);
+  const on = style.color;
+  const header = ansi.dim(
+    `diff (removed lines${removed.length > DIFF_CAP ? `, showing ${DIFF_CAP}/${removed.length}` : `, ${removed.length}`}):`,
+    on,
+  );
+  const body = shown.map((line) => ansi.red(`- ${line}`, on));
+  return [header, ...body, ""].join("\n");
 }

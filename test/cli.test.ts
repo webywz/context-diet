@@ -33,6 +33,7 @@ function makeIo(opts: {
     stdout,
     stderr,
     stdinIsTTY: opts.tty ?? false,
+    stderrIsTTY: false,
     env: opts.env ?? {},
     readFile: async (path) => {
       if (!(path in files)) {
@@ -132,4 +133,42 @@ describe("CLI", () => {
     assert.match(stderr.toString(), /Unknown option/);
     assert.match(stderr.toString(), /Usage:/);
   });
+
+  it("supports --dry-run (report only, empty stdout)", async () => {
+    const { io, stdout, stderr } = makeIo({
+      stdin: "alpha\n\n\nbeta\n",
+    });
+    const code = await run(["--dry-run"], io);
+    assert.equal(code, 0);
+    assert.equal(stdout.toString(), "");
+    assert.match(stderr.toString(), /context-diet/);
+    assert.match(stderr.toString(), /tokens:/);
+  });
+
+  it("supports --preset logs and --diff on stderr", async () => {
+    const { io, stdout, stderr } = makeIo({
+      stdin: [
+        "[2026-01-01 00:00:00] DEBUG loading config",
+        "[2026-01-01 00:00:01] DEBUG loading config",
+        "[2026-01-01 00:00:02] DEBUG loading config",
+        "[2026-01-01 00:00:03] ERROR boom",
+        "",
+      ].join("\n"),
+      env: { NO_COLOR: "1" },
+    });
+    const code = await run(["--preset", "logs", "--diff", "--quiet"], io);
+    assert.equal(code, 0);
+    assert.match(stdout.toString(), /ERROR boom/);
+    assert.match(stderr.toString(), /^diff /m);
+  });
+
+  it("does not write -o when --dry-run is set", async () => {
+    const { io, files } = makeIo({
+      stdin: "one\n\n\n\ntwo\n",
+    });
+    const code = await run(["-o", "slim.txt", "--dry-run", "--quiet"], io);
+    assert.equal(code, 0);
+    assert.equal(files["slim.txt"], undefined);
+  });
+
 });

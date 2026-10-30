@@ -2,9 +2,17 @@ export type KeepCategory = "headings" | "code" | "lists";
 
 export type LlmProvider = "openai" | "anthropic";
 
+export type { PresetName } from "./presets.js";
+
 export interface CutCounts {
   /** ANSI escape sequences removed. */
   ansiSequences: number;
+  /** HTML tags / scripts / styles / comments stripped. */
+  htmlChrome: number;
+  /** Quoted email reply lines dropped. */
+  quotedReplies: number;
+  /** Chat reaction / system / timestamp-only lines dropped. */
+  chatChrome: number;
   /** Repeated / chrome lines dropped (logs, banners, signatures). */
   boilerplateLines: number;
   /** Near-identical paragraphs dropped. */
@@ -26,6 +34,13 @@ export interface DietOptions {
   maxTokens?: number;
   /** Prefer these block types when truncating to a token budget. */
   keep?: KeepCategory[];
+  /**
+   * Named recipe: `logs`, `email`, `chat`, or `html`.
+   * Sets keep defaults and enables extra strippers; explicit `keep` wins.
+   */
+  preset?: import("./presets.js").PresetName;
+  /** Force HTML chrome stripping even without the `html` preset. */
+  stripHtml?: boolean;
   /**
    * Optional second-pass compression via OpenAI or Anthropic.
    * Requires a key in the environment; never implied.
@@ -58,6 +73,9 @@ export const KEEP_CATEGORIES: readonly KeepCategory[] = [
 export function emptyCuts(): CutCounts {
   return {
     ansiSequences: 0,
+    htmlChrome: 0,
+    quotedReplies: 0,
+    chatChrome: 0,
     boilerplateLines: 0,
     duplicateParagraphs: 0,
     whitespaceRuns: 0,

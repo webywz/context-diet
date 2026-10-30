@@ -4,7 +4,9 @@ import {
   stripAnsi,
   tidy,
 } from "./heuristics.js";
+import { stripHtmlChrome } from "./html.js";
 import { deepenText } from "./llm.js";
+import { resolvePreset } from "./presets.js";
 import { snapshot } from "./tokens.js";
 import { truncateToBudget } from "./truncate.js";
 import {
@@ -16,18 +18,27 @@ import {
 function localDiet(text: string, options: DietOptions): DietResult {
   const cuts = emptyCuts();
   const input = snapshot(text);
+  const resolved = resolvePreset(options.preset, options.keep);
+  const stripHtml = options.stripHtml ?? resolved.stripHtml;
 
   let next = stripAnsi(text, cuts);
+  if (stripHtml) {
+    next = stripHtmlChrome(next, cuts);
+  }
   next = omitHeavyBlobs(next, cuts);
-  next = tidy(next, cuts);
+  next = tidy(next, cuts, {
+    stripQuotedReplies: resolved.stripQuotedReplies,
+    stripChatChrome: resolved.stripChatChrome,
+  });
 
   if (options.maxTokens && options.maxTokens > 0) {
     const blocks = parseBlocks(next);
     const trimmed = truncateToBudget(
       blocks,
       options.maxTokens,
-      options.keep ?? [],
+      resolved.keep,
       cuts,
+      resolved.preferErrors,
     );
     next = joinBlocks(trimmed);
   }
@@ -52,6 +63,8 @@ export function diet(text: string, options: DietOptions = {}): DietResult {
   return localDiet(text, {
     maxTokens: options.maxTokens,
     keep: options.keep,
+    preset: options.preset,
+    stripHtml: options.stripHtml,
   });
 }
 
