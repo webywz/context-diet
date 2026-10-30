@@ -68,7 +68,7 @@ Explicit `--keep` always wins over the preset default.
 
 ### Before / after
 
-Input (`examples/noisy.txt`) — repeated logs, a duplicated runbook, a signature, a fat blob:
+Input (`examples/noisy.txt`, shipped in the npm package) — repeated logs, a duplicated runbook, a signature, a fat blob:
 
 ```
 [2026-03-14 09:01:02] INFO Starting request handler
