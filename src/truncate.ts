@@ -1,5 +1,6 @@
 import { joinBlocks, type Block } from "./blocks.js";
 import { estimateTokens } from "./tokens.js";
+import { isCodeSignatureLine, isCommentOnlyLine } from "./strip-code-json.js";
 import type { CutCounts, KeepCategory } from "./types.js";
 
 const ERROR_LINE_RE = /\b(ERROR|FATAL|CRITICAL|WARN(?:ING)?|SEVERE|PANIC|EXCEPTION)\b/i;
@@ -48,6 +49,7 @@ function scoreBlock(
   block: Block,
   keep: Set<KeepCategory>,
   preferErrors: boolean,
+  preferCode = false,
 ): number {
   let score = 1;
   switch (block.type) {
@@ -76,6 +78,11 @@ function scoreBlock(
       score = 1;
   }
   if (preferErrors && looksLikeError(block)) score += 18;
+  if (preferCode) {
+    const lines = block.raw.split("\n").filter((l) => l.trim());
+    if (lines.some(isCodeSignatureLine)) score += 16;
+    if (lines.length && lines.every(isCommentOnlyLine)) score -= 12;
+  }
   return score;
 }
 
@@ -110,6 +117,7 @@ export function truncateToBudget(
   keep: KeepCategory[],
   cuts: CutCounts,
   preferErrors = false,
+  preferCode = false,
 ): Block[] {
   if (!(maxTokens > 0)) return blocks;
   blocks = explodeLogParagraphs(blocks, preferErrors);
@@ -118,7 +126,7 @@ export function truncateToBudget(
   let total = tokens.reduce((a, b) => a + b, 0);
   if (total <= maxTokens) return blocks;
 
-  const scores = blocks.map((b) => scoreBlock(b, keepSet, preferErrors));
+  const scores = blocks.map((b) => scoreBlock(b, keepSet, preferErrors, preferCode));
   const order = blocks
     .map((_, i) => i)
     .sort((a, b) => {
@@ -157,7 +165,7 @@ export function truncateToBudget(
     .map((b, i) => ({
       i,
       b,
-      s: scoreBlock(b, keepSet, preferErrors),
+      s: scoreBlock(b, keepSet, preferErrors, preferCode),
       t: estimateTokens(b.raw),
     }))
     .filter((x) => x.b.type !== "blank")

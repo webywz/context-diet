@@ -13,6 +13,10 @@ export interface CutCounts {
   quotedReplies: number;
   /** Chat reaction / system / timestamp-only lines dropped. */
   chatChrome: number;
+  /** Long comment blocks / line comments stripped (code preset). */
+  codeComments: number;
+  /** Null/empty JSON fields dropped or JSONC comments removed (json preset). */
+  jsonFields: number;
   /** Repeated / chrome lines dropped (logs, banners, signatures). */
   boilerplateLines: number;
   /** Near-identical paragraphs dropped. */
@@ -35,7 +39,7 @@ export interface DietOptions {
   /** Prefer these block types when truncating to a token budget. */
   keep?: KeepCategory[];
   /**
-   * Named recipe: `logs`, `email`, `chat`, or `html`.
+   * Named recipe: `logs`, `email`, `chat`, `html`, `code`, or `json`.
    * Sets keep defaults and enables extra strippers; explicit `keep` wins.
    */
   preset?: import("./presets.js").PresetName;
@@ -76,6 +80,8 @@ export function emptyCuts(): CutCounts {
     htmlChrome: 0,
     quotedReplies: 0,
     chatChrome: 0,
+    codeComments: 0,
+    jsonFields: 0,
     boilerplateLines: 0,
     duplicateParagraphs: 0,
     whitespaceRuns: 0,

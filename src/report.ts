@@ -75,6 +75,8 @@ function cutLines(cuts: CutCounts): Array<[string, string]> {
     ["html chrome", String(cuts.htmlChrome)],
     ["quoted replies", String(cuts.quotedReplies)],
     ["chat chrome", String(cuts.chatChrome)],
+    ["code comments", String(cuts.codeComments)],
+    ["json fields", String(cuts.jsonFields)],
     ["boilerplate lines", String(cuts.boilerplateLines)],
     ["duplicate paragraphs", String(cuts.duplicateParagraphs)],
     ["whitespace runs", String(cuts.whitespaceRuns)],

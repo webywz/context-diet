@@ -76,3 +76,53 @@ describe("presets", () => {
     assert.ok(result.cuts.htmlChrome >= 1);
   });
 });
+
+  it("code preset strips long comments and keeps signatures under budget", () => {
+    const text = [
+      "/**",
+      " * Enormous license / history dump that should vanish.",
+      " * Line two of the dump.",
+      " * Line three of the dump.",
+      " * Line four of the dump.",
+      " */",
+      "export function greet(name: string): string {",
+      "  // noisy note",
+      "  return name;",
+      "}",
+      "",
+      "",
+      "",
+      "export async function main(): Promise<void> {",
+      "  greet('x');",
+      "}",
+    ].join("\n");
+    const result = diet(text, { preset: "code", maxTokens: 40 });
+    assert.match(result.text, /function greet/);
+    assert.doesNotMatch(result.text, /Enormous license/);
+    assert.ok(result.cuts.codeComments >= 1);
+    assert.ok(result.output.tokens <= 40, result.text);
+  });
+
+  it("json preset drops null/empty fields and JSONC comments", () => {
+    const text = `{
+  "name": "demo",
+  "description": "",
+  "nested": { "keep": true, "dropMe": null },
+  // trailing comment
+  "list": [1, null, 2]
+}`;
+    const result = diet(text, { preset: "json" });
+    assert.match(result.text, /"name": "demo"/);
+    assert.doesNotMatch(result.text, /dropMe/);
+    assert.doesNotMatch(result.text, /"description"/);
+    assert.doesNotMatch(result.text, /trailing comment/);
+    assert.ok(result.cuts.jsonFields >= 1);
+    // still valid JSON
+    JSON.parse(result.text);
+  });
+
+  it("json preset falls back to whitespace collapse for non-JSON", () => {
+    const result = diet("hello   world\n\n\nbye", { preset: "json" });
+    assert.match(result.text, /hello world/);
+    assert.doesNotMatch(result.text, /\n{3,}/);
+  });

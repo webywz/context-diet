@@ -1,0 +1,12 @@
+{
+  "name": "demo",
+  "version": "0.6.0",
+  "description": "",
+  "nested": {
+    "keep": true,
+    "dropMe": null,
+    "empty": ""
+  },
+  // JSONC comment
+  "list": [1, 2, null, 3]
+}
