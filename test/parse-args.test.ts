@@ -80,3 +80,28 @@ describe("parseArgs --demo", () => {
     assert.throws(() => parseArgs(["--demo", "noisy.txt"]), UsageError);
   });
 });
+
+describe("parseArgs --redact / --fail-over-tokens", () => {
+  it("parses --redact and --fail-over-tokens", () => {
+    const args = parseArgs([
+      "in.txt",
+      "--redact",
+      "--fail-over-tokens",
+      "500",
+      "--max-tokens",
+      "400",
+    ]);
+    assert.equal(args.redact, true);
+    assert.equal(args.failOverTokens, 500);
+    assert.equal(args.maxTokens, 400);
+  });
+
+  it("accepts --fail-over-tokens=12", () => {
+    const args = parseArgs(["--fail-over-tokens=12", "-"]);
+    assert.equal(args.failOverTokens, 12);
+  });
+
+  it("rejects non-positive --fail-over-tokens", () => {
+    assert.throws(() => parseArgs(["--fail-over-tokens", "0"]), UsageError);
+  });
+});

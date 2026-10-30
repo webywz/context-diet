@@ -81,6 +81,7 @@ function cutLines(cuts: CutCounts): Array<[string, string]> {
     ["duplicate paragraphs", String(cuts.duplicateParagraphs)],
     ["whitespace runs", String(cuts.whitespaceRuns)],
     ["omitted heavy blobs", String(cuts.omittedHeavyBlobs)],
+    ["secrets redacted", String(cuts.secretsRedacted)],
     ["truncated blocks", String(cuts.truncatedBlocks)],
     ["truncated tokens", `~${commas(cuts.truncatedTokens)}`],
     ["llm deepen", cuts.deepened ? "yes" : "no"],

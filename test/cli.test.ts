@@ -204,3 +204,58 @@ describe("CLI", () => {
   });
 
 });
+
+describe("CLI --redact / --fail-over-tokens", () => {
+  it("redacts secrets with --redact", async () => {
+    const { io, stdout, stderr } = makeIo({
+      stdin: "hello sk-abcdefghijklmnopqrstuvwxyz12 world\n",
+    });
+    const code = await run(["--redact", "--json"], io);
+    assert.equal(code, 0);
+    const payload = JSON.parse(stdout.toString()) as {
+      text: string;
+      cuts: { secretsRedacted: number };
+    };
+    assert.ok(payload.cuts.secretsRedacted >= 1);
+    assert.doesNotMatch(payload.text, /sk-abcdefgh/);
+    assert.match(payload.text, /\[redacted\]/);
+    assert.equal(stderr.toString(), "");
+  });
+
+  it("fails when output tokens exceed --fail-over-tokens", async () => {
+    const { io, stderr } = makeIo({
+      stdin: "alpha beta gamma delta epsilon zeta eta theta\n".repeat(20),
+    });
+    const code = await run(["--fail-over-tokens", "5", "--quiet"], io);
+    assert.equal(code, 1);
+    assert.match(stderr.toString(), /fail-over-tokens/);
+    assert.match(stderr.toString(), /exceed/);
+  });
+
+  it("passes when output tokens equal --fail-over-tokens (strict >)", async () => {
+    // Use a tiny input; estimate tokens then set gate to that exact number.
+    const { io: probeIo, stdout: probeOut } = makeIo({
+      stdin: "Just the facts.\n",
+    });
+    await run(["--json", "--quiet"], probeIo);
+    const tokens = (JSON.parse(probeOut.toString()) as { output: { tokens: number } })
+      .output.tokens;
+    const { io, stderr } = makeIo({
+      stdin: "Just the facts.\n",
+    });
+    const code = await run(
+      ["--fail-over-tokens", String(tokens), "--quiet"],
+      io,
+    );
+    assert.equal(code, 0);
+    assert.equal(stderr.toString(), "");
+  });
+
+  it("mentions --redact and --fail-over-tokens in --help", async () => {
+    const { io, stdout } = makeIo({ tty: true });
+    const code = await run(["--help"], io);
+    assert.equal(code, 0);
+    assert.match(stdout.toString(), /--redact/);
+    assert.match(stdout.toString(), /--fail-over-tokens/);
+  });
+});

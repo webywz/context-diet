@@ -25,6 +25,8 @@ export interface CutCounts {
   whitespaceRuns: number;
   /** Long base64 / data-URI blobs replaced with placeholders. */
   omittedHeavyBlobs: number;
+  /** Secret-shaped spans replaced with `[redacted]` (`--redact`). */
+  secretsRedacted: number;
   /** Blocks dropped or trimmed to fit `--max-tokens`. */
   truncatedBlocks: number;
   /** Estimated tokens removed by truncation (not other steps). */
@@ -45,6 +47,8 @@ export interface DietOptions {
   preset?: import("./presets.js").PresetName;
   /** Force HTML chrome stripping even without the `html` preset. */
   stripHtml?: boolean;
+  /** Scrub common secret shapes before diet heuristics. */
+  redact?: boolean;
   /**
    * Optional second-pass compression via OpenAI or Anthropic.
    * Requires a key in the environment; never implied.
@@ -86,6 +90,7 @@ export function emptyCuts(): CutCounts {
     duplicateParagraphs: 0,
     whitespaceRuns: 0,
     omittedHeavyBlobs: 0,
+    secretsRedacted: 0,
     truncatedBlocks: 0,
     truncatedTokens: 0,
     deepened: false,

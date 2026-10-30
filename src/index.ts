@@ -11,6 +11,7 @@ export {
   type PresetName,
 } from "./presets.js";
 export { estimateTokens, snapshot } from "./tokens.js";
+export { redactSecrets, REDACTED, type RedactCuts } from "./redact.js";
 export {
   formatGithubSummary,
   formatHumanReport,
