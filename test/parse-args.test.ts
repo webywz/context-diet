@@ -14,7 +14,7 @@ describe("parseArgs", () => {
       "-o",
       "out.txt",
     ]);
-    assert.equal(args.file, "input.txt");
+    assert.deepEqual(args.files, ["input.txt"]);
     assert.equal(args.maxTokens, 800);
     assert.deepEqual(args.keep, ["headings", "code"]);
     assert.equal(args.json, true);
@@ -25,15 +25,22 @@ describe("parseArgs", () => {
     const args = parseArgs(["--keep=code,lists", "--max-tokens=12", "-"]);
     assert.deepEqual(args.keep, ["code", "lists"]);
     assert.equal(args.maxTokens, 12);
-    assert.equal(args.file, "-");
+    assert.deepEqual(args.files, ["-"]);
   });
 
   it("rejects unknown keep values", () => {
     assert.throws(() => parseArgs(["--keep", "tables"]), UsageError);
   });
 
-  it("rejects extra positionals", () => {
-    assert.throws(() => parseArgs(["a.txt", "b.txt"]), UsageError);
+  it("accepts multiple file positionals", () => {
+    const args = parseArgs(["a.txt", "b.txt", "--max-tokens", "100"]);
+    assert.deepEqual(args.files, ["a.txt", "b.txt"]);
+    assert.equal(args.maxTokens, 100);
+  });
+
+  it("parses --sarif", () => {
+    const args = parseArgs(["in.txt", "--sarif", "out.sarif"]);
+    assert.equal(args.sarif, "out.sarif");
   });
 
   it("parses --provider", () => {
@@ -73,7 +80,7 @@ describe("parseArgs --demo", () => {
     assert.equal(args.demo, true);
     assert.equal(args.preset, "logs");
     assert.equal(args.maxTokens, 400);
-    assert.equal(args.file, undefined);
+    assert.deepEqual(args.files, []);
   });
 
   it("rejects --demo with a file", () => {

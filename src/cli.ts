@@ -20,6 +20,9 @@ import {
   toJsonReport,
 } from "./report.js";
 import { formatTap } from "./tap.js";
+import { formatSarif } from "./sarif.js";
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 
 export interface Io {
   stdin: NodeJS.ReadableStream;
@@ -54,36 +57,102 @@ function readStream(stream: NodeJS.ReadableStream): Promise<string> {
   });
 }
 
-async function readInput(args: CliArgs, io: Io): Promise<{ text: string; source: string }> {
+async function expandInputs(paths: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const path of paths) {
+    // Virtual test FS / missing paths: treat as files; io.readFile surfaces errors.
+    // Only expand when a real directory exists on disk.
+    let isDir = false;
+    try {
+      isDir = (await stat(path)).isDirectory();
+    } catch {
+      isDir = false;
+    }
+    if (isDir) {
+      let entries;
+      try {
+        entries = await readdir(path);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new UsageError(`Cannot read directory ${path}: ${msg}`);
+      }
+      const candidates = entries
+        .filter((name) => !name.startsWith("."))
+        .map((name) => join(path, name))
+        .sort();
+      let added = 0;
+      for (const file of candidates) {
+        try {
+          const st = await stat(file);
+          if (st.isFile()) {
+            out.push(file);
+            added += 1;
+          }
+        } catch {
+          // skip unreadable entries
+        }
+      }
+      if (added === 0) {
+        throw new UsageError(`Directory ${path} has no readable files`);
+      }
+    } else {
+      out.push(path);
+    }
+  }
+  if (out.length === 0) {
+    throw new UsageError("No input files found");
+  }
+  return out;
+}
+
+async function readInput(
+  args: CliArgs,
+  io: Io,
+): Promise<{ text: string; source: string; sources: string[] }> {
   if (args.demo) {
     const path = demoFixturePath();
     try {
       const text = await io.readFile(path);
-      return { text, source: "examples/noisy.txt (--demo)" };
+      return {
+        text,
+        source: "examples/noisy.txt (--demo)",
+        sources: ["examples/noisy.txt (--demo)"],
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new UsageError(`Cannot read bundled demo fixture: ${msg}`);
     }
   }
 
-  if (args.file && args.file !== "-") {
-    try {
-      const text = await io.readFile(args.file);
-      return { text, source: args.file };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new UsageError(`Cannot read ${args.file}: ${msg}`);
+  const useStdin = args.files.length === 0 || (args.files.length === 1 && args.files[0] === "-");
+  if (useStdin) {
+    if (io.stdinIsTTY) {
+      throw new UsageError(
+        "No input. Pass file/dir paths, pipe stdin, use `--demo`, or `-` with redirected input.",
+      );
     }
+    const text = await readStream(io.stdin);
+    return { text, source: "stdin", sources: ["stdin"] };
   }
 
-  const useStdin = !args.file || args.file === "-";
-  if (useStdin && io.stdinIsTTY) {
-    throw new UsageError(
-      "No input. Pass a file path, pipe stdin, use `--demo`, or `-` with redirected input.",
-    );
+  const files = await expandInputs(args.files);
+  const chunks: string[] = [];
+  for (const file of files) {
+    try {
+      const body = await io.readFile(file);
+      if (files.length === 1) {
+        chunks.push(body);
+      } else {
+        chunks.push(`--- file: ${file} ---\n${body}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new UsageError(`Cannot read ${file}: ${msg}`);
+    }
   }
-  const text = await readStream(io.stdin);
-  return { text, source: "stdin" };
+  const text = chunks.join("\n\n");
+  const source = files.length === 1 ? files[0]! : `${files.length} files`;
+  return { text, source, sources: files };
 }
 
 function writeOut(stream: NodeJS.WritableStream, chunk: string): Promise<void> {
@@ -120,10 +189,12 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
 
   let source: string;
   let text: string;
+  let sources: string[];
   try {
     const input = await readInput(args, io);
     source = input.source;
     text = input.text;
+    sources = input.sources;
   } catch (err) {
     if (err instanceof UsageError) {
       await writeOut(io.stderr, `${err.message}\n`);
@@ -151,7 +222,10 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     throw err;
   }
 
-  const json = toJsonReport(result, source, args.failOverTokens);
+  const json = toJsonReport(result, source, args.failOverTokens, {
+    maxTokens: args.maxTokens,
+    sources,
+  });
   const color = shouldUseColor(io.env, io.stderrIsTTY);
   const style = { color };
 
@@ -165,6 +239,22 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
       version,
     });
     await io.writeFile(args.html, html);
+  }
+
+  if (args.sarif) {
+    try {
+      await io.writeFile(
+        args.sarif,
+        formatSarif(result, source, version, {
+          failOverTokens: args.failOverTokens,
+          maxTokens: args.maxTokens,
+        }),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await writeOut(io.stderr, `context-diet: could not write sarif: ${msg}\n`);
+      return 1;
+    }
   }
 
   let tapExit: number | undefined;

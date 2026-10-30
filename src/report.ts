@@ -3,15 +3,21 @@ import type { CutCounts, DietResult } from "./types.js";
 export interface JsonBudget {
   /** Echo of --fail-over-tokens when set; null when unset. */
   failOverTokens: number | null;
+  /** Echo of --max-tokens when set; null when unset (shared across inputs). */
+  maxTokens: number | null;
   /** Output token estimate after diet. */
   outputTokens: number;
   /** true when no gate, or outputTokens <= failOverTokens. */
   ok: boolean;
+  /** True when multiple files/dirs share one token budget. */
+  shared: boolean;
 }
 
 export interface JsonReport {
   ok: true;
   source: string;
+  /** All input paths when multi-file / directory shared budget is used. */
+  sources?: string[];
   input: { chars: number; tokens: number };
   output: { chars: number; tokens: number };
   saved: {
@@ -21,7 +27,7 @@ export interface JsonReport {
     tokenPercent: number;
   };
   cuts: CutCounts;
-  /** Token budget gate for GitHub Actions parsing (--fail-over-tokens). */
+  /** Token budget gate for GitHub Actions parsing (--fail-over-tokens / --max-tokens). */
   budget: JsonBudget;
   text: string;
 }
@@ -65,14 +71,18 @@ export function toJsonReport(
   result: DietResult,
   source: string,
   failOverTokens?: number,
+  options: { maxTokens?: number; sources?: string[] } = {},
 ): JsonReport {
   const savedChars = Math.max(0, result.input.chars - result.output.chars);
   const savedTokens = Math.max(0, result.input.tokens - result.output.tokens);
   const limit = failOverTokens ?? null;
   const budgetOk = limit == null || result.output.tokens <= limit;
+  const sources = options.sources;
+  const shared = Boolean(sources && sources.length > 1);
   return {
     ok: true,
     source,
+    ...(sources && sources.length ? { sources } : {}),
     input: result.input,
     output: result.output,
     saved: {
@@ -84,8 +94,10 @@ export function toJsonReport(
     cuts: result.cuts,
     budget: {
       failOverTokens: limit,
+      maxTokens: options.maxTokens ?? null,
       outputTokens: result.output.tokens,
       ok: budgetOk,
+      shared,
     },
     text: result.text,
   };

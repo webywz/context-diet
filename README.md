@@ -44,7 +44,7 @@ cut:
 | **Presets** | `logs`, `email`, `chat`, `html`, `code`, `json` — sensible keep/strip defaults |
 | **Budget** | `--max-tokens` drops low-value blocks first; `--keep` pins headings/code/lists |
 | **Secret redaction** | `--redact` scrubs PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
-| **CI token gate** | `--fail-over-tokens <n>` exits `1` when output tokens still **>** n (no silent truncate); `--tap` for TAP 13; JSON `budget` field for Actions |
+| **CI token gate** | `--fail-over-tokens / --sarif <n>` exits `1` when output tokens still **>** n (no silent truncate); `--tap` for TAP 13; JSON `budget` field for Actions |
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
@@ -210,7 +210,25 @@ node dist/cli.js --demo --preset logs --max-tokens 400
 
 ---
 
+
+### Multi-file budget + SARIF (0.9)
+
+```bash
+context-diet a.md b.md notes/ --max-tokens 2000 --fail-over-tokens 2500 --json
+context-diet --demo --fail-over-tokens 1 --sarif over.sarif
+```
+
+- Multiple files/dirs share one `--max-tokens` / `--fail-over-tokens` budget (JSON `budget.shared`, `budget.maxTokens`, `sources[]`).
+- Directories expand to top-level files (non-recursive).
+- `--sarif <path>` writes SARIF 2.1.0 when output exceeds `--fail-over-tokens`.
+
+
 ## 中文
+
+### 多文件共享预算 + SARIF（0.9）
+
+可传多个文件/目录，共享 `--max-tokens` / `--fail-over-tokens`；JSON 含 `budget.shared`、`sources[]`。`--sarif <path>` 在超 `--fail-over-tokens` 时写出 SARIF 2.1.0。
+
 
 ### 演示
 

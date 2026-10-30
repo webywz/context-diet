@@ -1,6 +1,6 @@
 {
   "name": "@webywz/context-diet",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Slim LLM context before you send it — drop noise, keep the signal, estimate tokens.",
   "keywords": [
     "llm",
