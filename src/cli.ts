@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { realpathSync } from "node:fs";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { dietAsync } from "./diet.js";
@@ -215,12 +215,15 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
 function isMainModule(): boolean {
   const entry = process.argv[1];
   if (!entry) return false;
+  const self = fileURLToPath(import.meta.url);
   try {
-    const self = fileURLToPath(import.meta.url);
-    const resolved = isAbsolute(entry) ? entry : resolve(entry);
-    return self === resolved;
+    // npm/.bin and npx invoke via symlink; compare real paths (align agent-trace).
+    return (
+      realpathSync(entry) === self ||
+      realpathSync(entry) === realpathSync(self)
+    );
   } catch {
-    return false;
+    return /(cli\.(js|ts)|context-diet)$/.test(entry);
   }
 }
 
