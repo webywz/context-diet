@@ -44,7 +44,7 @@ cut:
 | **Presets** | `logs`, `email`, `chat`, `html`, `code`, `json` — sensible keep/strip defaults |
 | **Budget** | `--max-tokens` drops low-value blocks first; `--keep` pins headings/code/lists |
 | **Secret redaction** | `--redact` scrubs PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
-| **CI token gate** | `--fail-over-tokens <n>` exits `1` when output tokens still **>** n (no silent truncate) |
+| **CI token gate** | `--fail-over-tokens <n>` exits `1` when output tokens still **>** n (no silent truncate); `--tap` for TAP 13; JSON `budget` field for Actions |
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
@@ -106,6 +106,8 @@ All offline unless you pass `--deepen`.
 | Dedupe paragraphs | Exact and near-identical (Jaccard ≥ 0.84) |
 | Truncate | `--max-tokens` + `--keep` / presets |
 | Fail over tokens | `--fail-over-tokens` hard CI gate (after diet) |
+| TAP | `--tap` TAP version 13 (exit `1` when over `--fail-over-tokens`) |
+| JSON budget | `budget.failOverTokens` / `budget.outputTokens` / `budget.ok` in `--json` |
 
 Token estimates are **cl100k-ish** (~4 chars/word, 1 CJK ≈ 1 token). Good enough to budget a prompt — not a billed tokenizer.
 
@@ -122,6 +124,7 @@ context-diet [file] [options]
 | `--html <path>` | Write self-contained HTML report (stats + capped previews) |
 | `--max-tokens <n>` | Cap estimated output tokens (truncates) |
 | `--fail-over-tokens <n>` | Exit `1` if output tokens still **>** n (CI gate; distinct from truncate) |
+| `--tap` | TAP version 13 on stdout (CI; exit `1` if over `--fail-over-tokens`) |
 | `--redact` | Scrub common secret shapes → `[redacted]` (before diet heuristics) |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
@@ -187,7 +190,7 @@ estimateTokens(text);
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
-| `1` | Usage / missing input / unreadable file / `--fail-over-tokens` exceeded |
+| `1` | Usage / missing input / unreadable file / `--fail-over-tokens` exceeded / `--tap` not-ok |
 | `2` | `--deepen` failed (no key, HTTP error) |
 
 ### Develop
@@ -225,7 +228,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | **预设** | `logs` / `email` / `chat` / `html` / `code` / `json` |
 | **预算** | `--max-tokens` 优先丢掉低价值块；`--keep` 钉住标题/代码/列表 |
 | **密钥脱敏** | `--redact` 擦除 PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
-| **CI token 闸门** | `--fail-over-tokens <n>`：输出 token 仍 **>** n 时退出码 `1`（不静默截断） |
+| **CI token 闸门** | `--fail-over-tokens <n>`：输出 token 仍 **>** n 时退出码 `1`（不静默截断）；`--tap` 输出 TAP 13；JSON `budget` 字段供 Actions 解析 |
 | **管道友好** | 正文 → stdout；报告 → stderr |
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
 | **可选 deepen** | `--deepen` 仅在有 key 且你主动开启时走 LLM |
@@ -283,6 +286,8 @@ context-diet examples/noisy.txt --keep headings|code|lists
 | 段落去重 | 精确与近似（Jaccard ≥ 0.84） |
 | 截断 | `--max-tokens` + `--keep` / 预设 |
 | Token 闸门 | `--fail-over-tokens`：饮食后的硬失败 CI 闸 |
+| TAP | `--tap`：TAP version 13（超过 `--fail-over-tokens` 则退出 `1`） |
+| JSON budget | `--json` 中的 `budget.failOverTokens` / `budget.outputTokens` / `budget.ok` |
 
 Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）。够用来做预算，不是计费 tokenizer。
 
@@ -295,6 +300,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `--html <path>` | 写入自包含 HTML 报告（统计 + 截断预览） |
 | `--max-tokens <n>` | 估算输出 token 上限（会截断） |
 | `--fail-over-tokens <n>` | 输出 token 仍 **>** n 时退出 `1`（CI 闸；与截断不同） |
+| `--tap` | 向 stdout 输出 TAP version 13（超过 `--fail-over-tokens` 则退出 `1`） |
 | `--redact` | 擦除常见密钥形态 → `[redacted]`（在饮食启发式之前） |
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
@@ -329,7 +335,7 @@ context-diet chapter.md --deepen --max-tokens 1200
 | 码 | 含义 |
 | --- | --- |
 | `0` | 成功 |
-| `1` | 用法错误 / 缺输入 / 文件不可读 / `--fail-over-tokens` 超限 |
+| `1` | 用法错误 / 缺输入 / 文件不可读 / `--fail-over-tokens` 超限 / `--tap` not-ok |
 | `2` | `--deepen` 失败（无 key、HTTP 错误） |
 
 ### 链接

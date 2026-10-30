@@ -11,6 +11,8 @@ export interface CliArgs {
   diff: boolean;
   demo: boolean;
   redact: boolean;
+  /** Emit TAP version 13 on stdout (CI; aligns with agent-trace / eval-smoke). */
+  tap: boolean;
   /** Hard-fail when output tokens > N (CI gate; not truncation). */
   failOverTokens?: number;
   file?: string;
@@ -94,6 +96,7 @@ Options:
   -o, --output <file>       Write slimmed text to a file instead of stdout
       --max-tokens <n>      Truncate to an estimated token budget
       --fail-over-tokens <n>  Exit 1 if output tokens still > n (CI gate)
+      --tap                 TAP version 13 on stdout (CI; exit 1 if over --fail-over-tokens)
       --redact              Scrub common secrets (PEM/JWT/sk-/ghp_/…) → [redacted]
       --keep <cats>         Prefer headings, code, lists when truncating
                             (comma or pipe: headings|code|lists)
@@ -127,6 +130,7 @@ export function parseArgs(argv: string[]): CliArgs {
     diff: false,
     demo: false,
     redact: false,
+    tap: false,
     keep: [],
   };
 
@@ -179,6 +183,10 @@ export function parseArgs(argv: string[]): CliArgs {
     }
     if (a === "--redact") {
       args.redact = true;
+      continue;
+    }
+    if (a === "--tap") {
+      args.tap = true;
       continue;
     }
     if (a === "--fail-over-tokens" || a.startsWith("--fail-over-tokens=")) {
@@ -290,6 +298,10 @@ export function parseArgs(argv: string[]): CliArgs {
     seen.add(k);
     return true;
   });
+
+  if (args.json && args.tap) {
+    throw new UsageError("use only one of --json, --tap");
+  }
 
   return args;
 }

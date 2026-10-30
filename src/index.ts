@@ -18,6 +18,7 @@ export {
   formatRemovedDiff,
   shouldUseColor,
   toJsonReport,
+  type JsonBudget,
   type JsonReport,
   type ReportStyle,
 } from "./report.js";
@@ -37,3 +38,5 @@ export {
   type LlmProvider,
   type SizeSnapshot,
 } from "./types.js";
+export { formatTap } from "./tap.js";
+export type { TapResult, TapBudget } from "./tap.js";

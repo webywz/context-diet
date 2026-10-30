@@ -1,5 +1,14 @@
 import type { CutCounts, DietResult } from "./types.js";
 
+export interface JsonBudget {
+  /** Echo of --fail-over-tokens when set; null when unset. */
+  failOverTokens: number | null;
+  /** Output token estimate after diet. */
+  outputTokens: number;
+  /** true when no gate, or outputTokens <= failOverTokens. */
+  ok: boolean;
+}
+
 export interface JsonReport {
   ok: true;
   source: string;
@@ -12,6 +21,8 @@ export interface JsonReport {
     tokenPercent: number;
   };
   cuts: CutCounts;
+  /** Token budget gate for GitHub Actions parsing (--fail-over-tokens). */
+  budget: JsonBudget;
   text: string;
 }
 
@@ -50,9 +61,15 @@ export function shouldUseColor(
   return Boolean(streamIsTTY);
 }
 
-export function toJsonReport(result: DietResult, source: string): JsonReport {
+export function toJsonReport(
+  result: DietResult,
+  source: string,
+  failOverTokens?: number,
+): JsonReport {
   const savedChars = Math.max(0, result.input.chars - result.output.chars);
   const savedTokens = Math.max(0, result.input.tokens - result.output.tokens);
+  const limit = failOverTokens ?? null;
+  const budgetOk = limit == null || result.output.tokens <= limit;
   return {
     ok: true,
     source,
@@ -65,6 +82,11 @@ export function toJsonReport(result: DietResult, source: string): JsonReport {
       tokenPercent: pct(result.input.tokens, result.output.tokens),
     },
     cuts: result.cuts,
+    budget: {
+      failOverTokens: limit,
+      outputTokens: result.output.tokens,
+      ok: budgetOk,
+    },
     text: result.text,
   };
 }

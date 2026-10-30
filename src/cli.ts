@@ -19,6 +19,7 @@ import {
   shouldUseColor,
   toJsonReport,
 } from "./report.js";
+import { formatTap } from "./tap.js";
 
 export interface Io {
   stdin: NodeJS.ReadableStream;
@@ -150,7 +151,7 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     throw err;
   }
 
-  const json = toJsonReport(result, source);
+  const json = toJsonReport(result, source, args.failOverTokens);
   const color = shouldUseColor(io.env, io.stderrIsTTY);
   const style = { color };
 
@@ -166,7 +167,15 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     await io.writeFile(args.html, html);
   }
 
-  if (args.json) {
+  let tapExit: number | undefined;
+  if (args.tap) {
+    const tap = formatTap(result, source, {
+      failOverTokens: args.failOverTokens,
+      outputTokens: result.output.tokens,
+    });
+    await writeOut(io.stdout, tap.text);
+    tapExit = tap.exitCode;
+  } else if (args.json) {
     const payload = args.dryRun
       ? { ...json, text: undefined, dryRun: true }
       : args.output
@@ -177,8 +186,8 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     await writeOut(io.stdout, result.text);
   }
 
-  // --json is the machine report; skip the human summary (unless quiet already).
-  if (!args.json && !args.quiet) {
+  // --json / --tap are machine reports; skip the human summary (unless quiet already).
+  if (!args.json && !args.tap && !args.quiet) {
     await writeOut(io.stderr, formatHumanReport(result, source, version, style));
   }
   if (args.diff) {
@@ -202,12 +211,16 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     args.failOverTokens !== undefined &&
     result.output.tokens > args.failOverTokens
   ) {
-    await writeOut(
-      io.stderr,
-      `context-diet: output tokens ~${result.output.tokens} exceed --fail-over-tokens ${args.failOverTokens} (hard fail; use --max-tokens to truncate instead)\n`,
-    );
+    if (!args.tap) {
+      await writeOut(
+        io.stderr,
+        `context-diet: output tokens ~${result.output.tokens} exceed --fail-over-tokens ${args.failOverTokens} (hard fail; use --max-tokens to truncate instead)\n`,
+      );
+    }
     return 1;
   }
+
+  if (tapExit != null && tapExit !== 0) return tapExit;
 
   return 0;
 }
