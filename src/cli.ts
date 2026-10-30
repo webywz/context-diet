@@ -11,6 +11,7 @@ import {
   appendGithubSummary,
   resolveGithubSummaryPath,
 } from "./github-summary.js";
+import { formatHtmlReport } from "./html-report.js";
 import {
   formatGithubSummary,
   formatHumanReport,
@@ -154,6 +155,14 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
 
   if (args.output && !args.dryRun) {
     await io.writeFile(args.output, result.text);
+  }
+
+  if (args.html) {
+    const html = formatHtmlReport(result, source, {
+      original: text,
+      version,
+    });
+    await io.writeFile(args.html, html);
   }
 
   if (args.json) {
