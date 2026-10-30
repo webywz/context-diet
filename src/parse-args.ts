@@ -9,6 +9,7 @@ export interface CliArgs {
   deepen: boolean;
   dryRun: boolean;
   diff: boolean;
+  demo: boolean;
   file?: string;
   output?: string;
   maxTokens?: number;
@@ -79,6 +80,7 @@ context-diet — slim LLM context before you send it
 
 Usage:
   context-diet [file] [options]
+  context-diet --demo --preset logs --max-tokens 400
   cat logs.txt | context-diet --preset logs --max-tokens 2000
 
 Options:
@@ -88,6 +90,7 @@ Options:
                             (comma or pipe: headings|code|lists)
       --preset <name>       logs | email | chat | html
                             (sets keep defaults + extra strippers)
+      --demo                Diet the bundled examples/noisy.txt (no clone needed)
       --json                Print a machine-readable report (includes text)
       --dry-run             Report only; do not emit slimmed body / -o
       --diff                Show removed lines on stderr (capped)
@@ -111,6 +114,7 @@ export function parseArgs(argv: string[]): CliArgs {
     deepen: false,
     dryRun: false,
     diff: false,
+    demo: false,
     keep: [],
   };
 
@@ -155,6 +159,10 @@ export function parseArgs(argv: string[]): CliArgs {
     }
     if (a === "--diff") {
       args.diff = true;
+      continue;
+    }
+    if (a === "--demo") {
+      args.demo = true;
       continue;
     }
     if (a === "-o" || a === "--output" || a.startsWith("--output=")) {
@@ -222,6 +230,10 @@ export function parseArgs(argv: string[]): CliArgs {
       throw new UsageError(`Unexpected extra argument: ${a}`);
     }
     args.file = a;
+  }
+
+  if (args.demo && args.file) {
+    throw new UsageError("Pass --demo or a file path, not both.");
   }
 
   // Dedupe keep while preserving order.

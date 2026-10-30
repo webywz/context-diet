@@ -12,6 +12,14 @@ npm i -g @webywz/context-diet
 context-diet logs.txt --preset logs --max-tokens 2000
 ```
 
+### 30-second demo (no clone)
+
+```bash
+npx @webywz/context-diet --demo --preset logs --max-tokens 400
+```
+
+Bundled `examples/noisy.txt` goes in; slimmed body on **stdout**, human report on **stderr**. No repo checkout required.
+
 ## Install
 
 ```bash
@@ -30,6 +38,9 @@ npx @webywz/context-diet --help
 ```bash
 # file → slimmed text on stdout, report on stderr
 context-diet input.txt
+
+# bundled demo fixture (same I/O; great for npx smoke tests)
+npx @webywz/context-diet --demo --preset logs --max-tokens 400
 
 # stdin
 cat noisy.log | context-diet --preset logs --max-tokens 1500 > slim.txt
@@ -71,12 +82,14 @@ data:image/png;base64,iVBORw0KGgo…   (huge)
 
 ```bash
 context-diet examples/noisy.txt --keep headings|code|lists
+# same fixture via --demo:
+context-diet --demo --keep headings|code|lists
 ```
 
 Stderr:
 
 ```
-context-diet 0.2.0
+context-diet 0.3.0
 source:   examples/noisy.txt
 chars:    1,666 → 834  (−49.9%)
 tokens:   ~667 → ~312  (−53.2%)
@@ -127,6 +140,7 @@ context-diet [file] [options]
 | `--max-tokens <n>` | Cap estimated output tokens |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` |
+| `--demo` | Diet the bundled `examples/noisy.txt` (no file / clone needed) |
 | `--json` | JSON report on stdout (includes `text`, unless `-o` / `--dry-run`) |
 | `--dry-run` | Report only; do not emit slimmed body or write `-o` |
 | `--diff` | Show removed lines on stderr (capped) |
@@ -143,6 +157,22 @@ pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
 ```
 
 The human report respects `NO_COLOR` / `FORCE_COLOR`.
+
+## CI (GitHub Actions)
+
+Copy-paste starter: [`examples/github-action.yml`](examples/github-action.yml).
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+- name: Slim context
+  run: |
+    npx --yes @webywz/context-diet --demo --preset logs --max-tokens 400 > slim.txt
+    # or: npx --yes @webywz/context-diet path/to/noisy.log --preset logs -o slim.txt
+```
+
+Body lands on stdout (or `-o`); the human report stays on stderr in the job log. Offline heuristics — no API key unless you add `--deepen`.
 
 ## Optional LLM pass
 
@@ -184,6 +214,7 @@ estimateTokens(text);                   // cl100k-ish heuristic
 npm test
 npm run build
 node dist/cli.js --help
+node dist/cli.js --demo --preset logs --max-tokens 400
 ```
 
 MIT © webywz

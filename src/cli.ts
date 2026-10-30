@@ -5,7 +5,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { dietAsync } from "./diet.js";
 import { DeepenError } from "./llm.js";
-import { packageInfo } from "./package-info.js";
+import { demoFixturePath, packageInfo } from "./package-info.js";
 import { HELP_TEXT, parseArgs, UsageError, type CliArgs } from "./parse-args.js";
 import {
   formatHumanReport,
@@ -48,6 +48,17 @@ function readStream(stream: NodeJS.ReadableStream): Promise<string> {
 }
 
 async function readInput(args: CliArgs, io: Io): Promise<{ text: string; source: string }> {
+  if (args.demo) {
+    const path = demoFixturePath();
+    try {
+      const text = await io.readFile(path);
+      return { text, source: "examples/noisy.txt (--demo)" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new UsageError(`Cannot read bundled demo fixture: ${msg}`);
+    }
+  }
+
   if (args.file && args.file !== "-") {
     try {
       const text = await io.readFile(args.file);
@@ -61,7 +72,7 @@ async function readInput(args: CliArgs, io: Io): Promise<{ text: string; source:
   const useStdin = !args.file || args.file === "-";
   if (useStdin && io.stdinIsTTY) {
     throw new UsageError(
-      "No input. Pass a file path, pipe stdin, or use `-` with redirected input.",
+      "No input. Pass a file path, pipe stdin, use `--demo`, or `-` with redirected input.",
     );
   }
   const text = await readStream(io.stdin);

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { Readable, Writable } from "node:stream";
 import { describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import { run, type Io } from "../src/cli.ts";
+import { demoFixturePath } from "../src/package-info.ts";
 
 class BufferStream extends Writable {
   chunks: string[] = [];
@@ -169,6 +171,36 @@ describe("CLI", () => {
     const code = await run(["-o", "slim.txt", "--dry-run", "--quiet"], io);
     assert.equal(code, 0);
     assert.equal(files["slim.txt"], undefined);
+  });
+
+  it("supports --demo: exit 0 and output smaller than fixture", async () => {
+    const fixturePath = demoFixturePath();
+    const fixture = readFileSync(fixturePath, "utf8");
+    const { io, stdout, stderr } = makeIo({
+      files: { [fixturePath]: fixture },
+      tty: true,
+      env: { NO_COLOR: "1" },
+    });
+    const code = await run(
+      ["--demo", "--preset", "logs", "--max-tokens", "400"],
+      io,
+    );
+    assert.equal(code, 0);
+    const body = stdout.toString();
+    assert.ok(body.length > 0, "expected slimmed body on stdout");
+    assert.ok(
+      body.length < fixture.length,
+      `output (${body.length}) should be smaller than fixture (${fixture.length})`,
+    );
+    assert.match(stderr.toString(), /context-diet/);
+    assert.match(stderr.toString(), /--demo|examples\/noisy\.txt/);
+  });
+
+  it("rejects --demo together with a file path", async () => {
+    const { io, stderr } = makeIo({ tty: true });
+    const code = await run(["--demo", "in.txt"], io);
+    assert.equal(code, 1);
+    assert.match(stderr.toString(), /--demo or a file path/);
   });
 
 });

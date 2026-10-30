@@ -49,6 +49,11 @@ describe("CLI bin", () => {
         encoding: "utf8",
       }).split("\n")[0];
       assert.equal(shebang, "#!/usr/bin/env node");
+
+      const demoListing = listing
+        .split("\n")
+        .find((row) => /package\/examples\/noisy\.txt$/.test(row));
+      assert.ok(demoListing, "package/examples/noisy.txt must be in the tarball for --demo");
     } finally {
       if (existsSync(tarballPath)) unlinkSync(tarballPath);
     }
