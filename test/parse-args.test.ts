@@ -66,3 +66,17 @@ describe("parseArgs presets / dry-run / diff", () => {
     assert.equal(args.preset, "html");
   });
 });
+
+describe("parseArgs --demo", () => {
+  it("parses --demo", () => {
+    const args = parseArgs(["--demo", "--preset", "logs", "--max-tokens", "400"]);
+    assert.equal(args.demo, true);
+    assert.equal(args.preset, "logs");
+    assert.equal(args.maxTokens, 400);
+    assert.equal(args.file, undefined);
+  });
+
+  it("rejects --demo with a file", () => {
+    assert.throws(() => parseArgs(["--demo", "noisy.txt"]), UsageError);
+  });
+});

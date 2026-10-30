@@ -1,0 +1,48 @@
+# Copy-paste: slim a log / context artifact in GitHub Actions with context-diet.
+# No clone of this repo required — npx pulls @webywz/context-diet from npm.
+#
+# Body → stdout (redirect or -o); human report → stderr (shows in the job log).
+
+name: Slim context with context-diet
+
+on:
+  workflow_dispatch:
+  # Or: push / pull_request when you have a noisy artifact to diet.
+
+jobs:
+  diet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 30-second smoke (bundled fixture — no file to check in):
+      - name: Demo diet
+        run: |
+          npx --yes @webywz/context-diet --demo --preset logs --max-tokens 400 > slim-demo.txt
+          wc -c slim-demo.txt
+
+      # Real usage: point at a log / dump produced earlier in the job.
+      - name: Diet a workspace file
+        run: |
+          # Replace path/to/noisy.log with your artifact.
+          if [ -f path/to/noisy.log ]; then
+            npx --yes @webywz/context-diet path/to/noisy.log \
+              --preset logs \
+              --max-tokens 2000 \
+              -o slim.txt
+          else
+            echo "Skip: no path/to/noisy.log in this example checkout"
+          fi
+
+      - name: Upload slimmed text
+        if: hashFiles('slim.txt', 'slim-demo.txt') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: slimmed-context
+          path: |
+            slim-demo.txt
+            slim.txt
