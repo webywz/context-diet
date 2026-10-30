@@ -1,3 +1,4 @@
+import { isPresetName, type PresetName } from "./presets.js";
 import { KEEP_CATEGORIES, type KeepCategory, type LlmProvider } from "./types.js";
 
 export interface CliArgs {
@@ -6,10 +7,13 @@ export interface CliArgs {
   json: boolean;
   quiet: boolean;
   deepen: boolean;
+  dryRun: boolean;
+  diff: boolean;
   file?: string;
   output?: string;
   maxTokens?: number;
   keep: KeepCategory[];
+  preset?: PresetName;
   provider?: LlmProvider;
 }
 
@@ -75,14 +79,18 @@ context-diet — slim LLM context before you send it
 
 Usage:
   context-diet [file] [options]
-  cat logs.txt | context-diet --max-tokens 2000
+  cat logs.txt | context-diet --preset logs --max-tokens 2000
 
 Options:
   -o, --output <file>       Write slimmed text to a file instead of stdout
       --max-tokens <n>      Truncate to an estimated token budget
       --keep <cats>         Prefer headings, code, lists when truncating
                             (comma or pipe: headings|code|lists)
+      --preset <name>       logs | email | chat | html
+                            (sets keep defaults + extra strippers)
       --json                Print a machine-readable report (includes text)
+      --dry-run             Report only; do not emit slimmed body / -o
+      --diff                Show removed lines on stderr (capped)
       --deepen              Optional LLM pass (OPENAI_API_KEY / ANTHROPIC_API_KEY)
       --provider <name>     openai | anthropic (default: first available key)
   -q, --quiet               Do not print the human report to stderr
@@ -90,6 +98,7 @@ Options:
   -V, --version             Show version
 
 Offline by default. --deepen is never required.
+Respects NO_COLOR / FORCE_COLOR for the human report.
 Token counts are a cl100k-ish heuristic, not a billed tokenizer.
 `;
 
@@ -100,6 +109,8 @@ export function parseArgs(argv: string[]): CliArgs {
     json: false,
     quiet: false,
     deepen: false,
+    dryRun: false,
+    diff: false,
     keep: [],
   };
 
@@ -138,6 +149,14 @@ export function parseArgs(argv: string[]): CliArgs {
       args.deepen = true;
       continue;
     }
+    if (a === "--dry-run") {
+      args.dryRun = true;
+      continue;
+    }
+    if (a === "--diff") {
+      args.diff = true;
+      continue;
+    }
     if (a === "-o" || a === "--output" || a.startsWith("--output=")) {
       const inline = a.startsWith("--output=") ? a.slice("--output=".length) : undefined;
       const got = takeValue(argv, i + 1, "--output", inline);
@@ -158,6 +177,21 @@ export function parseArgs(argv: string[]): CliArgs {
       const inline = a.startsWith("--keep=") ? a.slice("--keep=".length) : undefined;
       const got = takeValue(argv, i + 1, "--keep", inline);
       args.keep.push(...parseKeepValue(got.value));
+      i = got.next - 1;
+      continue;
+    }
+    if (a === "--preset" || a.startsWith("--preset=")) {
+      const inline = a.startsWith("--preset=")
+        ? a.slice("--preset=".length)
+        : undefined;
+      const got = takeValue(argv, i + 1, "--preset", inline);
+      const name = got.value.toLowerCase();
+      if (!isPresetName(name)) {
+        throw new UsageError(
+          `Unknown --preset "${got.value}". Use logs, email, chat, or html.`,
+        );
+      }
+      args.preset = name;
       i = got.next - 1;
       continue;
     }

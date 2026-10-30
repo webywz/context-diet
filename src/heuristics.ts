@@ -21,6 +21,20 @@ const CHROME_RE = [
   /^\s*downloading (packages|metadata)\.{2,}\s*$/i,
 ];
 
+const QUOTE_START_RE = [
+  /^\s*on .+ wrote:\s*$/i,
+  /^\s*-{2,}\s*original message\s*-{2,}\s*$/i,
+  /^\s*begin forwarded message\s*$/i,
+];
+
+const CHAT_CHROME_RE = [
+  /^\s*(reacted to|added a reaction|removed a reaction)\b/i,
+  /^\s*[👍👎❤️😂😮😢🔥🎉👏🤣✅❌]\s*(x?\d+)?\s*$/u,
+  /^\s*\[[^\]]*(joined|left|was added|was removed|changed the|renamed|pinned|unpinned)[^\]]*\]\s*$/i,
+  /^\s*(today|yesterday|\d{1,2}:\d{2}(\s?[ap]m)?)\s*$/i,
+  /^\s*—+\s*(new messages?|unread)\s*—+\s*$/i,
+];
+
 const DATA_URI_RE =
   /data:[a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/]+=*/g;
 const HEAVY_BLOB_RE = /[A-Za-z0-9+/]{120,}={0,2}/g;
@@ -174,6 +188,79 @@ export function stripBoilerplate(blocks: Block[], cuts: CutCounts): Block[] {
   return blocks.map(mapBlock).filter((b): b is Block => b !== null);
 }
 
+/**
+ * Drop quoted email reply chains: lines starting with ">", "On … wrote:",
+ * and classic "-----Original Message-----" / forwarded-message tails.
+ */
+export function stripQuotedReplies(blocks: Block[], cuts: CutCounts): Block[] {
+  const out: Block[] = [];
+  let dropRest = false;
+
+  for (const block of blocks) {
+    if (dropRest) {
+      if (block.type !== "blank" && block.type !== "code") {
+        const n = block.raw.split("\n").filter((l) => l.trim() !== "").length;
+        cuts.quotedReplies += Math.max(1, n);
+      }
+      continue;
+    }
+    if (block.type === "code" || block.type === "blank") {
+      out.push(block);
+      continue;
+    }
+
+    const kept: string[] = [];
+    for (const line of block.raw.split("\n")) {
+      const trimmed = line.trim();
+      if (QUOTE_START_RE.some((re) => re.test(trimmed))) {
+        cuts.quotedReplies += 1;
+        // Original Message / forwarded tails usually mean the rest is noise.
+        if (/original message|forwarded message/i.test(trimmed)) {
+          dropRest = true;
+          break;
+        }
+        continue;
+      }
+      if (/^>/.test(line)) {
+        cuts.quotedReplies += 1;
+        continue;
+      }
+      kept.push(line);
+    }
+    if (dropRest) continue;
+    if (kept.length === 0) continue;
+    if (kept.every((l) => l.trim() === "")) continue;
+    out.push({ ...block, raw: kept.join("\n") });
+  }
+  return out;
+}
+
+/**
+ * Drop Slack/Discord-ish chrome: reactions, join/leave system lines,
+ * lone timestamps, and "— unread —" dividers.
+ */
+export function stripChatChrome(blocks: Block[], cuts: CutCounts): Block[] {
+  const out: Block[] = [];
+  for (const block of blocks) {
+    if (block.type === "code" || block.type === "blank") {
+      out.push(block);
+      continue;
+    }
+    const kept: string[] = [];
+    for (const line of block.raw.split("\n")) {
+      if (CHAT_CHROME_RE.some((re) => re.test(line))) {
+        cuts.chatChrome += 1;
+        continue;
+      }
+      kept.push(line);
+    }
+    if (kept.length === 0) continue;
+    if (kept.every((l) => l.trim() === "")) continue;
+    out.push({ ...block, raw: kept.join("\n") });
+  }
+  return out;
+}
+
 function normalizeParagraph(text: string): string {
   return text
     .toLowerCase()
@@ -240,9 +327,26 @@ export function dedupeParagraphs(blocks: Block[], cuts: CutCounts): Block[] {
   return out;
 }
 
-export function tidy(text: string, cuts: CutCounts): string {
+export interface TidyOptions {
+  stripQuotedReplies?: boolean;
+  stripChatChrome?: boolean;
+}
+
+export function tidy(
+  text: string,
+  cuts: CutCounts,
+  options: TidyOptions = {},
+): string {
   let blocks = parseBlocks(text);
   blocks = collapseBlankBlocks(blocks, cuts);
+  if (options.stripQuotedReplies) {
+    blocks = stripQuotedReplies(blocks, cuts);
+    blocks = collapseBlankBlocks(blocks, cuts);
+  }
+  if (options.stripChatChrome) {
+    blocks = stripChatChrome(blocks, cuts);
+    blocks = collapseBlankBlocks(blocks, cuts);
+  }
   blocks = stripBoilerplate(blocks, cuts);
   blocks = collapseBlankBlocks(blocks, cuts);
   blocks = dedupeParagraphs(blocks, cuts);

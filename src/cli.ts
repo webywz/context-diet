@@ -7,13 +7,19 @@ import { dietAsync } from "./diet.js";
 import { DeepenError } from "./llm.js";
 import { packageInfo } from "./package-info.js";
 import { HELP_TEXT, parseArgs, UsageError, type CliArgs } from "./parse-args.js";
-import { formatHumanReport, toJsonReport } from "./report.js";
+import {
+  formatHumanReport,
+  formatRemovedDiff,
+  shouldUseColor,
+  toJsonReport,
+} from "./report.js";
 
 export interface Io {
   stdin: NodeJS.ReadableStream;
   stdout: NodeJS.WritableStream;
   stderr: NodeJS.WritableStream;
   stdinIsTTY: boolean | undefined;
+  stderrIsTTY?: boolean | undefined;
   env: NodeJS.ProcessEnv;
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, contents: string) => Promise<void>;
@@ -24,6 +30,7 @@ const defaultIo = (): Io => ({
   stdout: process.stdout,
   stderr: process.stderr,
   stdinIsTTY: process.stdin.isTTY,
+  stderrIsTTY: process.stderr.isTTY,
   env: process.env,
   readFile: (path) => readFile(path, "utf8"),
   writeFile: (path, contents) => writeFile(path, contents, "utf8"),
@@ -112,6 +119,7 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     result = await dietAsync(text, {
       maxTokens: args.maxTokens,
       keep: args.keep,
+      preset: args.preset,
       deepen: args.deepen,
       provider: args.provider,
       env: io.env,
@@ -125,24 +133,32 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
   }
 
   const json = toJsonReport(result, source);
+  const color = shouldUseColor(io.env, io.stderrIsTTY);
+  const style = { color };
 
-  if (args.output) {
+  if (args.output && !args.dryRun) {
     await io.writeFile(args.output, result.text);
   }
 
   if (args.json) {
-    const payload = args.output ? { ...json, text: undefined, outputPath: args.output } : json;
+    const payload = args.dryRun
+      ? { ...json, text: undefined, dryRun: true }
+      : args.output
+        ? { ...json, text: undefined, outputPath: args.output }
+        : json;
     await writeOut(io.stdout, `${JSON.stringify(payload, null, 2)}\n`);
-    return 0;
-  }
-
-  if (!args.output) {
+  } else if (!args.dryRun && !args.output) {
     await writeOut(io.stdout, result.text);
   }
 
-  if (!args.quiet) {
-    await writeOut(io.stderr, formatHumanReport(result, source, version));
+  // --json is the machine report; skip the human summary (unless quiet already).
+  if (!args.json && !args.quiet) {
+    await writeOut(io.stderr, formatHumanReport(result, source, version, style));
   }
+  if (args.diff) {
+    await writeOut(io.stderr, formatRemovedDiff(text, result.text, style));
+  }
+
   return 0;
 }
 

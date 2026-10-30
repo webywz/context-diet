@@ -42,3 +42,27 @@ describe("parseArgs", () => {
     assert.equal(args.provider, "anthropic");
   });
 });
+
+describe("parseArgs presets / dry-run / diff", () => {
+  it("parses --preset and --dry-run --diff", () => {
+    const args = parseArgs([
+      "in.txt",
+      "--preset",
+      "email",
+      "--dry-run",
+      "--diff",
+    ]);
+    assert.equal(args.preset, "email");
+    assert.equal(args.dryRun, true);
+    assert.equal(args.diff, true);
+  });
+
+  it("rejects unknown presets", () => {
+    assert.throws(() => parseArgs(["--preset", "slides"]), UsageError);
+  });
+
+  it("accepts --preset=html", () => {
+    const args = parseArgs(["--preset=html", "-"]);
+    assert.equal(args.preset, "html");
+  });
+});
