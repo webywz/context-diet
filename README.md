@@ -42,13 +42,14 @@ cut:
 | --- | --- |
 | **Offline heuristics** | Strip ANSI/HTML chrome, drop boilerplate, dedupe, omit base64 blobs |
 | **Presets** | `logs`, `email`, `chat`, `html`, `code`, `json` — sensible keep/strip defaults |
-| **Budget** | `--max-tokens` drops low-value blocks first; `--keep` pins headings/code/lists |
+| **Budget** | `--max-tokens` drops low-value blocks first (shared across files/dirs); `--keep` pins headings/code/lists |
 | **Secret redaction** | `--redact` scrubs PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
-| **CI token gate** | `--fail-over-tokens / --sarif <n>` exits `1` when output tokens still **>** n (no silent truncate); `--tap` for TAP 13; JSON `budget` field for Actions |
+| **CI token gate** | `--fail-over-tokens <n>` exits `1` when **combined** output tokens still **>** n (shared multi-file budget; no silent truncate); `--sarif <path>` for Code Scanning; `--tap` for TAP 13; JSON `budget` field for Actions |
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
 | **HTML report** | `--html <path>` writes a self-contained before/after report (offline, no CDN) |
+| **Multi-file / dirs** | Pass several files or directories; they share one `--max-tokens` / `--fail-over-tokens` budget (`budget.shared`, `sources[]`) |
 | **Step summary** | `--github-summary` appends a short diet report to `$GITHUB_STEP_SUMMARY` |
 
 ### Install
@@ -74,6 +75,8 @@ context-diet input.txt --dry-run --diff
 context-diet --demo --html diet.html -q
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
 context-diet dump.txt --redact --fail-over-tokens 2000
+context-diet a.md b.md notes/ --max-tokens 2000 --fail-over-tokens 2500 --json
+context-diet --demo --fail-over-tokens 1 --sarif over.sarif
 context-diet examples/noisy.txt --keep headings|code|lists
 ```
 
@@ -105,25 +108,26 @@ All offline unless you pass `--deepen`.
 | Drop quoted / chat chrome | Email quotes; reactions / join-leave |
 | Dedupe paragraphs | Exact and near-identical (Jaccard ≥ 0.84) |
 | Truncate | `--max-tokens` + `--keep` / presets |
-| Fail over tokens | `--fail-over-tokens` hard CI gate (after diet) |
+| Fail over tokens | `--fail-over-tokens` hard CI gate on **combined** output tokens after diet (shared across inputs) |
 | TAP | `--tap` TAP version 13 (exit `1` when over `--fail-over-tokens`) |
-| JSON budget | `budget.failOverTokens` / `budget.outputTokens` / `budget.ok` in `--json` |
+| JSON budget | `budget.failOverTokens` / `budget.outputTokens` / `budget.ok` / `budget.shared` / `sources[]` in `--json` |
 
 Token estimates are **cl100k-ish** (~4 chars/word, 1 CJK ≈ 1 token). Good enough to budget a prompt — not a billed tokenizer.
 
 ### CLI
 
 ```
-context-diet [file] [options]
+context-diet [file|dir ...] [options]
 ```
 
 | Flag | Meaning |
 | --- | --- |
-| `[file]` | Path to read; omit or `-` for stdin |
+| `[file\|dir ...]` | One or more paths; dirs expand top-level files; omit or `-` for stdin. Multi-input shares one token budget |
 | `-o, --output <file>` | Write slimmed text here instead of stdout |
 | `--html <path>` | Write self-contained HTML report (stats + capped previews) |
-| `--max-tokens <n>` | Cap estimated output tokens (truncates) |
-| `--fail-over-tokens <n>` | Exit `1` if output tokens still **>** n (CI gate; distinct from truncate) |
+| `--max-tokens <n>` | Cap estimated output tokens (truncates; **shared** across files/dirs) |
+| `--fail-over-tokens <n>` | Exit `1` if **combined** output tokens still **>** n (CI gate; shared; distinct from truncate) |
+| `--sarif <path>` | Write SARIF 2.1.0 when over `--fail-over-tokens` (GitHub Code Scanning) |
 | `--tap` | TAP version 13 on stdout (CI; exit `1` if over `--fail-over-tokens`) |
 | `--redact` | Scrub common secret shapes → `[redacted]` (before diet heuristics) |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
@@ -211,7 +215,9 @@ node dist/cli.js --demo --preset logs --max-tokens 400
 ---
 
 
-### Multi-file budget + SARIF (0.9)
+### Multi-file budget + SARIF (0.9 / 0.10)
+
+Documented in **Features** and **Quick start** above. Summary:
 
 ```bash
 context-diet a.md b.md notes/ --max-tokens 2000 --fail-over-tokens 2500 --json
@@ -220,14 +226,15 @@ context-diet --demo --fail-over-tokens 1 --sarif over.sarif
 
 - Multiple files/dirs share one `--max-tokens` / `--fail-over-tokens` budget (JSON `budget.shared`, `budget.maxTokens`, `sources[]`).
 - Directories expand to top-level files (non-recursive).
+- `--fail-over-tokens` gates the **combined** dieted output, not each file alone.
 - `--sarif <path>` writes SARIF 2.1.0 when output exceeds `--fail-over-tokens`.
 
 
 ## 中文
 
-### 多文件共享预算 + SARIF（0.9）
+### 多文件共享预算 + SARIF（0.9 / 0.10）
 
-可传多个文件/目录，共享 `--max-tokens` / `--fail-over-tokens`；JSON 含 `budget.shared`、`sources[]`。`--sarif <path>` 在超 `--fail-over-tokens` 时写出 SARIF 2.1.0。
+详见上文 **功能** 与 **快速开始**。可传多个文件/目录，共享 `--max-tokens` / `--fail-over-tokens`（闸门看**合并后**输出）；JSON 含 `budget.shared`、`sources[]`。`--sarif <path>` 在超 `--fail-over-tokens` 时写出 SARIF 2.1.0。
 
 
 ### 演示
@@ -244,13 +251,14 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | --- | --- |
 | **离线启发式** | 剥 ANSI/HTML、去样板、去重、省略 base64 大块 |
 | **预设** | `logs` / `email` / `chat` / `html` / `code` / `json` |
-| **预算** | `--max-tokens` 优先丢掉低价值块；`--keep` 钉住标题/代码/列表 |
+| **预算** | `--max-tokens` 优先丢掉低价值块（多文件/目录共享）；`--keep` 钉住标题/代码/列表 |
 | **密钥脱敏** | `--redact` 擦除 PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
-| **CI token 闸门** | `--fail-over-tokens <n>`：输出 token 仍 **>** n 时退出码 `1`（不静默截断）；`--tap` 输出 TAP 13；JSON `budget` 字段供 Actions 解析 |
+| **CI token 闸门** | `--fail-over-tokens <n>`：**合并后**输出 token 仍 **>** n 时退出码 `1`（多文件共享预算；不静默截断）；`--sarif <path>` 写 Code Scanning；`--tap` 输出 TAP 13；JSON `budget` 供 Actions |
 | **管道友好** | 正文 → stdout；报告 → stderr |
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
 | **可选 deepen** | `--deepen` 仅在有 key 且你主动开启时走 LLM |
 | **HTML 报告** | `--html <path>`：写出自包含前后对比报告（离线、无 CDN） |
+| **多文件 / 目录** | 可传多个文件或目录，共享一份 `--max-tokens` / `--fail-over-tokens`（`budget.shared`、`sources[]`） |
 | **Step Summary** | `--github-summary`：把精简饮食报告追加到 `$GITHUB_STEP_SUMMARY` |
 
 ### 安装
@@ -272,6 +280,8 @@ context-diet input.txt --dry-run --diff
 context-diet --demo --html diet.html -q
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
 context-diet dump.txt --redact --fail-over-tokens 2000
+context-diet a.md b.md notes/ --max-tokens 2000 --fail-over-tokens 2500 --json
+context-diet --demo --fail-over-tokens 1 --sarif over.sarif
 context-diet examples/noisy.txt --keep headings|code|lists
 ```
 
@@ -303,9 +313,9 @@ context-diet examples/noisy.txt --keep headings|code|lists
 | 去引用 / 聊天 chrome | 邮件引用；反应 / 进出房 |
 | 段落去重 | 精确与近似（Jaccard ≥ 0.84） |
 | 截断 | `--max-tokens` + `--keep` / 预设 |
-| Token 闸门 | `--fail-over-tokens`：饮食后的硬失败 CI 闸 |
+| Token 闸门 | `--fail-over-tokens`：饮食后对**合并输出** token 的硬失败 CI 闸（多输入共享） |
 | TAP | `--tap`：TAP version 13（超过 `--fail-over-tokens` 则退出 `1`） |
-| JSON budget | `--json` 中的 `budget.failOverTokens` / `budget.outputTokens` / `budget.ok` |
+| JSON budget | `--json` 中的 `budget.failOverTokens` / `budget.outputTokens` / `budget.ok` / `budget.shared` / `sources[]` |
 
 Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）。够用来做预算，不是计费 tokenizer。
 
@@ -313,11 +323,12 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 
 | 参数 | 含义 |
 | --- | --- |
-| `[file]` | 读取路径；省略或 `-` 读 stdin |
+| `[file\|dir ...]` | 一个或多个路径；目录展开顶层文件；省略或 `-` 读 stdin。多输入共享一份 token 预算 |
 | `-o, --output <file>` | 把瘦身正文写到文件 |
 | `--html <path>` | 写入自包含 HTML 报告（统计 + 截断预览） |
-| `--max-tokens <n>` | 估算输出 token 上限（会截断） |
-| `--fail-over-tokens <n>` | 输出 token 仍 **>** n 时退出 `1`（CI 闸；与截断不同） |
+| `--max-tokens <n>` | 估算输出 token 上限（会截断；**多文件/目录共享**） |
+| `--fail-over-tokens <n>` | **合并后**输出 token 仍 **>** n 时退出 `1`（CI 闸；共享；与截断不同） |
+| `--sarif <path>` | 超过 `--fail-over-tokens` 时写出 SARIF 2.1.0（GitHub Code Scanning） |
 | `--tap` | 向 stdout 输出 TAP version 13（超过 `--fail-over-tokens` 则退出 `1`） |
 | `--redact` | 擦除常见密钥形态 → `[redacted]`（在饮食启发式之前） |
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
