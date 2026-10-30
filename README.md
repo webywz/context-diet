@@ -43,6 +43,8 @@ cut:
 | **Offline heuristics** | Strip ANSI/HTML chrome, drop boilerplate, dedupe, omit base64 blobs |
 | **Presets** | `logs`, `email`, `chat`, `html`, `code`, `json` — sensible keep/strip defaults |
 | **Budget** | `--max-tokens` drops low-value blocks first; `--keep` pins headings/code/lists |
+| **Secret redaction** | `--redact` scrubs PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
+| **CI token gate** | `--fail-over-tokens <n>` exits `1` when output tokens still **>** n (no silent truncate) |
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
@@ -71,6 +73,7 @@ context-diet notes.md -o slim.md --keep headings,code,lists
 context-diet input.txt --dry-run --diff
 context-diet --demo --html diet.html -q
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
+context-diet dump.txt --redact --fail-over-tokens 2000
 context-diet examples/noisy.txt --keep headings|code|lists
 ```
 
@@ -93,6 +96,7 @@ All offline unless you pass `--deepen`.
 
 | Step | Behavior |
 | --- | --- |
+| Redact secrets | Optional `--redact` before other steps |
 | Strip ANSI | Terminal color / OSC sequences |
 | Strip HTML | Optional / `--preset html` |
 | Omit heavy blobs | Long base64 / data-URIs → `[omitted blob: N chars]` |
@@ -101,6 +105,7 @@ All offline unless you pass `--deepen`.
 | Drop quoted / chat chrome | Email quotes; reactions / join-leave |
 | Dedupe paragraphs | Exact and near-identical (Jaccard ≥ 0.84) |
 | Truncate | `--max-tokens` + `--keep` / presets |
+| Fail over tokens | `--fail-over-tokens` hard CI gate (after diet) |
 
 Token estimates are **cl100k-ish** (~4 chars/word, 1 CJK ≈ 1 token). Good enough to budget a prompt — not a billed tokenizer.
 
@@ -115,7 +120,9 @@ context-diet [file] [options]
 | `[file]` | Path to read; omit or `-` for stdin |
 | `-o, --output <file>` | Write slimmed text here instead of stdout |
 | `--html <path>` | Write self-contained HTML report (stats + capped previews) |
-| `--max-tokens <n>` | Cap estimated output tokens |
+| `--max-tokens <n>` | Cap estimated output tokens (truncates) |
+| `--fail-over-tokens <n>` | Exit `1` if output tokens still **>** n (CI gate; distinct from truncate) |
+| `--redact` | Scrub common secret shapes → `[redacted]` (before diet heuristics) |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
 | `--demo` | Diet bundled `examples/noisy.txt` |
@@ -155,7 +162,8 @@ Starter: [`examples/github-action.yml`](examples/github-action.yml) (includes `-
     node-version: 22
 - name: Slim context
   run: |
-    npx --yes @webywz/context-diet --demo --preset logs --max-tokens 400 > slim.txt
+    npx --yes @webywz/context-diet --demo --preset logs --max-tokens 400 \
+      --redact --fail-over-tokens 500 > slim.txt
 ```
 
 ### Library
@@ -167,6 +175,7 @@ const { text, input, output, cuts } = diet(raw, {
   maxTokens: 2000,
   preset: "logs",
   keep: ["code"],
+  redact: true,
 });
 
 await dietAsync(raw, { deepen: true });
@@ -178,7 +187,7 @@ estimateTokens(text);
 | Code | Meaning |
 | --- | --- |
 | `0` | Success |
-| `1` | Usage / missing input / unreadable file |
+| `1` | Usage / missing input / unreadable file / `--fail-over-tokens` exceeded |
 | `2` | `--deepen` failed (no key, HTTP error) |
 
 ### Develop
@@ -215,6 +224,8 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | **离线启发式** | 剥 ANSI/HTML、去样板、去重、省略 base64 大块 |
 | **预设** | `logs` / `email` / `chat` / `html` / `code` / `json` |
 | **预算** | `--max-tokens` 优先丢掉低价值块；`--keep` 钉住标题/代码/列表 |
+| **密钥脱敏** | `--redact` 擦除 PEM / JWT / `sk-` / `ghp_` / Slack / AWS / Bearer / Basic → `[redacted]` |
+| **CI token 闸门** | `--fail-over-tokens <n>`：输出 token 仍 **>** n 时退出码 `1`（不静默截断） |
 | **管道友好** | 正文 → stdout；报告 → stderr |
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
 | **可选 deepen** | `--deepen` 仅在有 key 且你主动开启时走 LLM |
@@ -239,6 +250,7 @@ context-diet notes.md -o slim.md --keep headings,code,lists
 context-diet input.txt --dry-run --diff
 context-diet --demo --html diet.html -q
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
+context-diet dump.txt --redact --fail-over-tokens 2000
 context-diet examples/noisy.txt --keep headings|code|lists
 ```
 
@@ -261,6 +273,7 @@ context-diet examples/noisy.txt --keep headings|code|lists
 
 | 步骤 | 行为 |
 | --- | --- |
+| 密钥脱敏 | 可选 `--redact`，在其他步骤之前 |
 | 剥 ANSI | 终端颜色 / OSC |
 | 剥 HTML | 可选 / `--preset html` |
 | 省略大块 | 长 base64 / data-URI → `[omitted blob: N chars]` |
@@ -269,6 +282,7 @@ context-diet examples/noisy.txt --keep headings|code|lists
 | 去引用 / 聊天 chrome | 邮件引用；反应 / 进出房 |
 | 段落去重 | 精确与近似（Jaccard ≥ 0.84） |
 | 截断 | `--max-tokens` + `--keep` / 预设 |
+| Token 闸门 | `--fail-over-tokens`：饮食后的硬失败 CI 闸 |
 
 Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）。够用来做预算，不是计费 tokenizer。
 
@@ -279,7 +293,9 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `[file]` | 读取路径；省略或 `-` 读 stdin |
 | `-o, --output <file>` | 把瘦身正文写到文件 |
 | `--html <path>` | 写入自包含 HTML 报告（统计 + 截断预览） |
-| `--max-tokens <n>` | 估算输出 token 上限 |
+| `--max-tokens <n>` | 估算输出 token 上限（会截断） |
+| `--fail-over-tokens <n>` | 输出 token 仍 **>** n 时退出 `1`（CI 闸；与截断不同） |
+| `--redact` | 擦除常见密钥形态 → `[redacted]`（在饮食启发式之前） |
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
 | `--demo` | 对包内 `examples/noisy.txt` 瘦身 |
@@ -313,7 +329,7 @@ context-diet chapter.md --deepen --max-tokens 1200
 | 码 | 含义 |
 | --- | --- |
 | `0` | 成功 |
-| `1` | 用法错误 / 缺输入 / 文件不可读 |
+| `1` | 用法错误 / 缺输入 / 文件不可读 / `--fail-over-tokens` 超限 |
 | `2` | `--deepen` 失败（无 key、HTTP 错误） |
 
 ### 链接

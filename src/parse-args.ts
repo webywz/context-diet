@@ -10,6 +10,9 @@ export interface CliArgs {
   dryRun: boolean;
   diff: boolean;
   demo: boolean;
+  redact: boolean;
+  /** Hard-fail when output tokens > N (CI gate; not truncation). */
+  failOverTokens?: number;
   file?: string;
   output?: string;
   maxTokens?: number;
@@ -90,6 +93,8 @@ Usage:
 Options:
   -o, --output <file>       Write slimmed text to a file instead of stdout
       --max-tokens <n>      Truncate to an estimated token budget
+      --fail-over-tokens <n>  Exit 1 if output tokens still > n (CI gate)
+      --redact              Scrub common secrets (PEM/JWT/sk-/ghp_/…) → [redacted]
       --keep <cats>         Prefer headings, code, lists when truncating
                             (comma or pipe: headings|code|lists)
       --preset <name>       logs | email | chat | html | code | json
@@ -121,6 +126,7 @@ export function parseArgs(argv: string[]): CliArgs {
     dryRun: false,
     diff: false,
     demo: false,
+    redact: false,
     keep: [],
   };
 
@@ -169,6 +175,19 @@ export function parseArgs(argv: string[]): CliArgs {
     }
     if (a === "--demo") {
       args.demo = true;
+      continue;
+    }
+    if (a === "--redact") {
+      args.redact = true;
+      continue;
+    }
+    if (a === "--fail-over-tokens" || a.startsWith("--fail-over-tokens=")) {
+      const inline = a.startsWith("--fail-over-tokens=")
+        ? a.slice("--fail-over-tokens=".length)
+        : undefined;
+      const got = takeValue(argv, i + 1, "--fail-over-tokens", inline);
+      args.failOverTokens = parsePositiveInt("--fail-over-tokens", got.value);
+      i = got.next - 1;
       continue;
     }
     if (a === "--html" || a.startsWith("--html=")) {

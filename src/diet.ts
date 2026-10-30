@@ -6,6 +6,7 @@ import {
 } from "./heuristics.js";
 import { stripCodeNoise, stripJsonNoise } from "./strip-code-json.js";
 import { stripHtmlChrome } from "./html.js";
+import { redactSecrets } from "./redact.js";
 import { deepenText } from "./llm.js";
 import { resolvePreset } from "./presets.js";
 import { snapshot } from "./tokens.js";
@@ -22,7 +23,11 @@ function localDiet(text: string, options: DietOptions): DietResult {
   const resolved = resolvePreset(options.preset, options.keep);
   const stripHtml = options.stripHtml ?? resolved.stripHtml;
 
-  let next = stripAnsi(text, cuts);
+  let next = text;
+  if (options.redact) {
+    next = redactSecrets(next, cuts);
+  }
+  next = stripAnsi(next, cuts);
   if (stripHtml) {
     next = stripHtmlChrome(next, cuts);
   }
@@ -73,6 +78,7 @@ export function diet(text: string, options: DietOptions = {}): DietResult {
     keep: options.keep,
     preset: options.preset,
     stripHtml: options.stripHtml,
+    redact: options.redact,
   });
 }
 

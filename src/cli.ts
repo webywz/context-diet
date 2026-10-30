@@ -139,6 +139,7 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
       preset: args.preset,
       deepen: args.deepen,
       provider: args.provider,
+      redact: args.redact,
       env: io.env,
     });
   } catch (err) {
@@ -195,6 +196,17 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
       const msg = err instanceof Error ? err.message : String(err);
       await writeOut(io.stderr, `could not write github summary: ${msg}\n`);
     }
+  }
+
+  if (
+    args.failOverTokens !== undefined &&
+    result.output.tokens > args.failOverTokens
+  ) {
+    await writeOut(
+      io.stderr,
+      `context-diet: output tokens ~${result.output.tokens} exceed --fail-over-tokens ${args.failOverTokens} (hard fail; use --max-tokens to truncate instead)\n`,
+    );
+    return 1;
   }
 
   return 0;
