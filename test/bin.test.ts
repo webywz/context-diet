@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -56,6 +65,32 @@ describe("CLI bin", () => {
       assert.ok(demoListing, "package/examples/noisy.txt must be in the tarball for --demo");
     } finally {
       if (existsSync(tarballPath)) unlinkSync(tarballPath);
+    }
+  });
+
+  it("runs when argv[1] is a symlink to dist/cli.js (npm .bin / npx)", () => {
+    execFileSync("npm", ["run", "build"], { cwd: root, stdio: "pipe" });
+
+    const cli = join(root, "dist", "cli.js");
+    const dir = join(tmpdir(), `context-diet-bin-symlink-${process.pid}`);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const link = join(dir, "context-diet");
+    try {
+      symlinkSync(cli, link);
+      const out = execFileSync(process.execPath, [link, "-V"], {
+        encoding: "utf8",
+      });
+      assert.match(out.trim(), /^\d+\.\d+\.\d+/);
+      assert.notEqual(out.trim(), "");
+
+      const help = execFileSync(process.execPath, [link, "--help"], {
+        encoding: "utf8",
+      });
+      assert.match(help, /context-diet/);
+      assert.ok(help.trim().length > 0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });
