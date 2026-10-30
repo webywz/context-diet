@@ -200,7 +200,7 @@ describe("CLI", () => {
     const { io, stderr } = makeIo({ tty: true });
     const code = await run(["--demo", "in.txt"], io);
     assert.equal(code, 1);
-    assert.match(stderr.toString(), /--demo or a file path/);
+    assert.match(stderr.toString(), /--demo or file\/dir paths/);
   });
 
 });

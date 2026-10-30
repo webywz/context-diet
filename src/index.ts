@@ -40,3 +40,5 @@ export {
 } from "./types.js";
 export { formatTap } from "./tap.js";
 export type { TapResult, TapBudget } from "./tap.js";
+
+export { formatSarif, renderSarif, type SarifLog, type SarifBudget } from "./sarif.js";

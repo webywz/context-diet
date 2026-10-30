@@ -15,7 +15,10 @@ export interface CliArgs {
   tap: boolean;
   /** Hard-fail when output tokens > N (CI gate; not truncation). */
   failOverTokens?: number;
-  file?: string;
+  /** Write SARIF 2.1.0 for over-budget output to this path. */
+  sarif?: string;
+  /** Input file paths and/or directories (shared --max-tokens / --fail-over-tokens). */
+  files: string[];
   output?: string;
   maxTokens?: number;
   keep: KeepCategory[];
@@ -88,14 +91,16 @@ export const HELP_TEXT = `\
 context-diet — slim LLM context before you send it
 
 Usage:
-  context-diet [file] [options]
+  context-diet [file|dir ...] [options]
   context-diet --demo --preset logs --max-tokens 400
   cat logs.txt | context-diet --preset logs --max-tokens 2000
+  context-diet a.md b.md dir/ --max-tokens 2000 --json
 
 Options:
   -o, --output <file>       Write slimmed text to a file instead of stdout
-      --max-tokens <n>      Truncate to an estimated token budget
-      --fail-over-tokens <n>  Exit 1 if output tokens still > n (CI gate)
+      --max-tokens <n>      Truncate to an estimated token budget (shared across files/dirs)
+      --fail-over-tokens <n>  Exit 1 if output tokens still > n (CI gate; shared)
+      --sarif <path>        Write SARIF 2.1.0 when over --fail-over-tokens (Code Scanning)
       --tap                 TAP version 13 on stdout (CI; exit 1 if over --fail-over-tokens)
       --redact              Scrub common secrets (PEM/JWT/sk-/ghp_/…) → [redacted]
       --keep <cats>         Prefer headings, code, lists when truncating
@@ -131,6 +136,7 @@ export function parseArgs(argv: string[]): CliArgs {
     demo: false,
     redact: false,
     tap: false,
+    files: [],
     keep: [],
   };
 
@@ -138,13 +144,8 @@ export function parseArgs(argv: string[]): CliArgs {
     const a = argv[i]!;
 
     if (a === "--") {
-      const rest = argv.slice(i + 1);
-      if (rest.length > 1) {
-        throw new UsageError(`Unexpected extra arguments: ${rest.slice(1).join(" ")}`);
-      }
-      if (rest[0] !== undefined) {
-        if (args.file) throw new UsageError("Pass at most one input file.");
-        args.file = rest[0];
+      for (const rest of argv.slice(i + 1)) {
+        args.files.push(rest);
       }
       break;
     }
@@ -187,6 +188,15 @@ export function parseArgs(argv: string[]): CliArgs {
     }
     if (a === "--tap") {
       args.tap = true;
+      continue;
+    }
+    if (a === "--sarif" || a.startsWith("--sarif=")) {
+      const inline = a.startsWith("--sarif=")
+        ? a.slice("--sarif=".length)
+        : undefined;
+      const got = takeValue(argv, i + 1, "--sarif", inline);
+      args.sarif = got.value;
+      i = got.next - 1;
       continue;
     }
     if (a === "--fail-over-tokens" || a.startsWith("--fail-over-tokens=")) {
@@ -272,23 +282,23 @@ export function parseArgs(argv: string[]): CliArgs {
       continue;
     }
     if (a === "-") {
-      if (args.file) {
-        throw new UsageError("Pass at most one input file.");
-      }
-      args.file = "-";
+      args.files.push("-");
       continue;
     }
     if (a.startsWith("-")) {
       throw new UsageError(`Unknown option: ${a}`);
     }
-    if (args.file) {
-      throw new UsageError(`Unexpected extra argument: ${a}`);
-    }
-    args.file = a;
+    args.files.push(a);
   }
 
-  if (args.demo && args.file) {
-    throw new UsageError("Pass --demo or a file path, not both.");
+  if (args.demo && args.files.length) {
+    throw new UsageError("Pass --demo or file/dir paths, not both.");
+  }
+  if (args.files.filter((f) => f === "-").length > 1) {
+    throw new UsageError("Pass stdin (-) at most once.");
+  }
+  if (args.files.includes("-") && args.files.some((f) => f !== "-")) {
+    throw new UsageError("Pass stdin (-) alone, not mixed with file paths.");
   }
 
   // Dedupe keep while preserving order.
