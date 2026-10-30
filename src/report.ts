@@ -156,3 +156,44 @@ export function formatRemovedDiff(
   const body = shown.map((line) => ansi.red(`- ${line}`, on));
   return [header, ...body, ""].join("\n");
 }
+
+function commasPlain(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/** Concise diet Markdown for GitHub Actions step summary. */
+export function formatGithubSummary(
+  result: DietResult,
+  source: string,
+  version: string,
+): string {
+  const savedChars = Math.max(0, result.input.chars - result.output.chars);
+  const savedTokens = Math.max(0, result.input.tokens - result.output.tokens);
+  const charPct = pct(result.input.chars, result.output.chars);
+  const tokPct = pct(result.input.tokens, result.output.tokens);
+  const safeSource = source.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  const lines: string[] = [];
+  lines.push(`### context-diet ${version}`);
+  lines.push("");
+  lines.push(`Source: \`${safeSource}\``);
+  lines.push("");
+  lines.push("| | Before | After | Saved |");
+  lines.push("| --- | ---: | ---: | ---: |");
+  lines.push(
+    `| Chars | ${commasPlain(result.input.chars)} | ${commasPlain(result.output.chars)} | ${commasPlain(savedChars)} (−${charPct}%) |`,
+  );
+  lines.push(
+    `| Tokens (est.) | ~${commasPlain(result.input.tokens)} | ~${commasPlain(result.output.tokens)} | ~${commasPlain(savedTokens)} (−${tokPct}%) |`,
+  );
+  lines.push("");
+  const notable = cutLines(result.cuts).filter(([, v]) => v !== "0" && v !== "~0" && v !== "no");
+  if (notable.length) {
+    lines.push("**Cuts**");
+    lines.push("");
+    for (const [k, v] of notable) {
+      lines.push(`- ${k}: ${v}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}

@@ -25,7 +25,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 Bundled `examples/noisy.txt` goes in; slimmed body on **stdout**, human report on **stderr**. No clone required — `examples/` ships in the npm package.
 
 ```text
-context-diet 0.3.1
+context-diet 0.4.0
 source:   examples/noisy.txt
 chars:    1,666 → 834  (−49.9%)
 tokens:   ~667 → ~312  (−53.2%)
@@ -46,6 +46,7 @@ cut:
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
+| **Step summary** | `--github-summary` appends a short diet report to `$GITHUB_STEP_SUMMARY` |
 
 ### Install
 
@@ -118,6 +119,7 @@ context-diet [file] [options]
 | `--diff` | Show removed lines on stderr (capped) |
 | `--deepen` | Optional LLM rewrite |
 | `--provider openai\|anthropic` | Force provider for `--deepen` |
+| `--github-summary [path]` | Append diet Markdown to `$GITHUB_STEP_SUMMARY` or path |
 | `-q, --quiet` | No human report on stderr |
 | `-h, --help` / `-V, --version` | Help / version |
 
@@ -140,7 +142,7 @@ Defaults: `gpt-4o-mini` / `claude-3-5-haiku-20241022` (`OPENAI_MODEL` / `ANTHROP
 
 ### CI (GitHub Actions)
 
-Starter: [`examples/github-action.yml`](examples/github-action.yml).
+Starter: [`examples/github-action.yml`](examples/github-action.yml) (includes `--github-summary`).
 
 ```yaml
 - uses: actions/setup-node@v4
@@ -211,6 +213,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | **管道友好** | 正文 → stdout；报告 → stderr |
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
 | **可选 deepen** | `--deepen` 仅在有 key 且你主动开启时走 LLM |
+| **Step Summary** | `--github-summary`：把精简饮食报告追加到 `$GITHUB_STEP_SUMMARY` |
 
 ### 安装
 
@@ -275,6 +278,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `--diff` | stderr 显示被删行（有上限） |
 | `--deepen` | 可选 LLM 二次压缩 |
 | `--provider openai\|anthropic` | 强制 deepen 提供商 |
+| `--github-summary [path]` | 追加饮食 Markdown 到 `$GITHUB_STEP_SUMMARY` 或指定路径 |
 | `-q, --quiet` | 不打印人类报告 |
 
 默认 I/O 适合管道：

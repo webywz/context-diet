@@ -1,7 +1,8 @@
 # Copy-paste: slim a log / context artifact in GitHub Actions with context-diet.
 # No clone of this repo required — npx pulls @webywz/context-diet from npm.
 #
-# Body → stdout (redirect or -o); human report → stderr (shows in the job log).
+# Body → stdout (redirect or -o); human report → stderr (job log).
+# --github-summary appends a short Markdown diet report to $GITHUB_STEP_SUMMARY.
 
 name: Slim context with context-diet
 
@@ -20,9 +21,11 @@ jobs:
           node-version: 22
 
       # 30-second smoke (bundled fixture — no file to check in):
-      - name: Demo diet
+      - name: Demo diet + step summary
         run: |
-          npx --yes @webywz/context-diet --demo --preset logs --max-tokens 400 > slim-demo.txt
+          npx --yes @webywz/context-diet --demo --preset logs --max-tokens 400 \
+            --github-summary \
+            > slim-demo.txt
           wc -c slim-demo.txt
 
       # Real usage: point at a log / dump produced earlier in the job.
@@ -33,6 +36,7 @@ jobs:
             npx --yes @webywz/context-diet path/to/noisy.log \
               --preset logs \
               --max-tokens 2000 \
+              --github-summary \
               -o slim.txt
           else
             echo "Skip: no path/to/noisy.log in this example checkout"

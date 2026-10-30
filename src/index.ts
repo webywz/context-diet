@@ -12,6 +12,7 @@ export {
 } from "./presets.js";
 export { estimateTokens, snapshot } from "./tokens.js";
 export {
+  formatGithubSummary,
   formatHumanReport,
   formatRemovedDiff,
   shouldUseColor,
@@ -19,6 +20,11 @@ export {
   type JsonReport,
   type ReportStyle,
 } from "./report.js";
+export {
+  appendGithubSummary,
+  resolveGithubSummaryPath,
+  DEFAULT_GITHUB_SUMMARY,
+} from "./github-summary.js";
 export {
   KEEP_CATEGORIES,
   emptyCuts,
