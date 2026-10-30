@@ -8,6 +8,11 @@ import { DeepenError } from "./llm.js";
 import { demoFixturePath, packageInfo } from "./package-info.js";
 import { HELP_TEXT, parseArgs, UsageError, type CliArgs } from "./parse-args.js";
 import {
+  appendGithubSummary,
+  resolveGithubSummaryPath,
+} from "./github-summary.js";
+import {
+  formatGithubSummary,
   formatHumanReport,
   formatRemovedDiff,
   shouldUseColor,
@@ -168,6 +173,19 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
   }
   if (args.diff) {
     await writeOut(io.stderr, formatRemovedDiff(text, result.text, style));
+  }
+
+  const outSummary =
+    args.githubSummary === undefined
+      ? resolveGithubSummaryPath(undefined, io.env)
+      : resolveGithubSummaryPath(args.githubSummary, io.env);
+  if (outSummary) {
+    try {
+      appendGithubSummary(outSummary, formatGithubSummary(result, source, version));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await writeOut(io.stderr, `could not write github summary: ${msg}\n`);
+    }
   }
 
   return 0;
