@@ -20,6 +20,7 @@ export {
   type JsonReport,
   type ReportStyle,
 } from "./report.js";
+export { formatHtmlReport, escapeHtml, type HtmlReportOptions } from "./html-report.js";
 export {
   appendGithubSummary,
   resolveGithubSummaryPath,

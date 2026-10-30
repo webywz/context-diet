@@ -18,6 +18,8 @@ export interface CliArgs {
   provider?: LlmProvider;
   /** true = auto path; string = explicit path */
   githubSummary?: string | true;
+  /** Write self-contained HTML report to this path. */
+  html?: string;
 }
 
 export class UsageError extends Error {
@@ -98,6 +100,7 @@ Options:
       --diff                Show removed lines on stderr (capped)
       --deepen              Optional LLM pass (OPENAI_API_KEY / ANTHROPIC_API_KEY)
       --provider <name>     openai | anthropic (default: first available key)
+      --html <path>           Write self-contained HTML report to path
       --github-summary [path]  Append Markdown to GITHUB_STEP_SUMMARY or path
   -q, --quiet               Do not print the human report to stderr
   -h, --help                Show this help
@@ -166,6 +169,13 @@ export function parseArgs(argv: string[]): CliArgs {
     }
     if (a === "--demo") {
       args.demo = true;
+      continue;
+    }
+    if (a === "--html" || a.startsWith("--html=")) {
+      const inline = a.startsWith("--html=") ? a.slice("--html=".length) : undefined;
+      const got = takeValue(argv, i + 1, "--html", inline);
+      args.html = got.value;
+      i = got.next - 1;
       continue;
     }
     if (a === "--github-summary" || a.startsWith("--github-summary=")) {

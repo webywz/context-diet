@@ -25,7 +25,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 Bundled `examples/noisy.txt` goes in; slimmed body on **stdout**, human report on **stderr**. No clone required — `examples/` ships in the npm package.
 
 ```text
-context-diet 0.4.0
+context-diet 0.5.0
 source:   examples/noisy.txt
 chars:    1,666 → 834  (−49.9%)
 tokens:   ~667 → ~312  (−53.2%)
@@ -46,6 +46,7 @@ cut:
 | **Pipe-friendly** | Slimmed body → stdout; report → stderr |
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
+| **HTML report** | `--html <path>` writes a self-contained before/after report (offline, no CDN) |
 | **Step summary** | `--github-summary` appends a short diet report to `$GITHUB_STEP_SUMMARY` |
 
 ### Install
@@ -68,6 +69,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 cat noisy.log | context-diet --preset logs --max-tokens 1500 > slim.txt
 context-diet notes.md -o slim.md --keep headings,code,lists
 context-diet input.txt --dry-run --diff
+context-diet --demo --html diet.html -q
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
 context-diet examples/noisy.txt --keep headings|code|lists
 ```
@@ -110,6 +112,7 @@ context-diet [file] [options]
 | --- | --- |
 | `[file]` | Path to read; omit or `-` for stdin |
 | `-o, --output <file>` | Write slimmed text here instead of stdout |
+| `--html <path>` | Write self-contained HTML report (stats + capped previews) |
 | `--max-tokens <n>` | Cap estimated output tokens |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` |
@@ -213,6 +216,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | **管道友好** | 正文 → stdout；报告 → stderr |
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
 | **可选 deepen** | `--deepen` 仅在有 key 且你主动开启时走 LLM |
+| **HTML 报告** | `--html <path>`：写出自包含前后对比报告（离线、无 CDN） |
 | **Step Summary** | `--github-summary`：把精简饮食报告追加到 `$GITHUB_STEP_SUMMARY` |
 
 ### 安装
@@ -231,6 +235,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 cat noisy.log | context-diet --preset logs --max-tokens 1500 > slim.txt
 context-diet notes.md -o slim.md --keep headings,code,lists
 context-diet input.txt --dry-run --diff
+context-diet --demo --html diet.html -q
 context-diet input.txt --json | jq '{tokens: .output.tokens, cuts}'
 context-diet examples/noisy.txt --keep headings|code|lists
 ```
@@ -269,6 +274,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | --- | --- |
 | `[file]` | 读取路径；省略或 `-` 读 stdin |
 | `-o, --output <file>` | 把瘦身正文写到文件 |
+| `--html <path>` | 写入自包含 HTML 报告（统计 + 截断预览） |
 | `--max-tokens <n>` | 估算输出 token 上限 |
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` |
