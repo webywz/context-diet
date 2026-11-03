@@ -28,6 +28,8 @@ export interface CliArgs {
   githubSummary?: string | true;
   /** Write self-contained HTML report to this path. */
   html?: string;
+  /** Additional glob patterns to exclude when scanning directories. */
+  exclude: string[];
 }
 
 export class UsageError extends Error {
@@ -107,6 +109,7 @@ Options:
                             (comma or pipe: headings|code|lists)
       --preset <name>       logs | email | chat | html | code | json
                             (sets keep defaults + extra strippers)
+      --exclude <glob>      Skip files matching glob pattern (repeatable; dirs only)
       --demo                Diet the bundled examples/noisy.txt (no clone needed)
       --json                Print a machine-readable report (includes text)
       --dry-run             Report only; do not emit slimmed body / -o
@@ -122,6 +125,10 @@ Options:
 Offline by default. --deepen is never required.
 Respects NO_COLOR / FORCE_COLOR for the human report.
 Token counts are a cl100k-ish heuristic, not a billed tokenizer.
+
+When scanning directories, node_modules/ and .git/ are always skipped.
+.gitignore patterns (from project root) are also honored.
+Use --exclude for additional custom patterns (e.g. --exclude '*.tmp').
 `;
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -138,6 +145,7 @@ export function parseArgs(argv: string[]): CliArgs {
     tap: false,
     files: [],
     keep: [],
+    exclude: [],
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -278,6 +286,15 @@ export function parseArgs(argv: string[]): CliArgs {
         throw new UsageError(`Unknown --provider "${got.value}". Use openai or anthropic.`);
       }
       args.provider = name as LlmProvider;
+      i = got.next - 1;
+      continue;
+    }
+    if (a === "--exclude" || a.startsWith("--exclude=")) {
+      const inline = a.startsWith("--exclude=")
+        ? a.slice("--exclude=".length)
+        : undefined;
+      const got = takeValue(argv, i + 1, "--exclude", inline);
+      args.exclude.push(got.value);
       i = got.next - 1;
       continue;
     }

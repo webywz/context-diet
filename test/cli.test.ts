@@ -205,6 +205,17 @@ describe("CLI", () => {
 
 });
 
+describe("CLI --exclude", () => {
+  it("mentions --exclude in --help", async () => {
+    const { io, stdout } = makeIo({ tty: true });
+    const code = await run(["--help"], io);
+    assert.equal(code, 0);
+    assert.match(stdout.toString(), /--exclude/);
+    assert.match(stdout.toString(), /node_modules/);
+    assert.match(stdout.toString(), /\.git/);
+  });
+});
+
 describe("CLI --redact / --fail-over-tokens", () => {
   it("redacts secrets with --redact", async () => {
     const { io, stdout, stderr } = makeIo({

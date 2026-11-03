@@ -22,7 +22,8 @@ import {
 import { formatTap } from "./tap.js";
 import { formatSarif } from "./sarif.js";
 import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+import { createIgnoreMatcher } from "./ignore.js";
 
 export interface Io {
   stdin: NodeJS.ReadableStream;
@@ -57,7 +58,7 @@ function readStream(stream: NodeJS.ReadableStream): Promise<string> {
   });
 }
 
-async function expandInputs(paths: string[]): Promise<string[]> {
+async function expandInputs(paths: string[], exclude: string[]): Promise<string[]> {
   const out: string[] = [];
   for (const path of paths) {
     // Virtual test FS / missing paths: treat as files; io.readFile surfaces errors.
@@ -69,6 +70,7 @@ async function expandInputs(paths: string[]): Promise<string[]> {
       isDir = false;
     }
     if (isDir) {
+      const matcher = await createIgnoreMatcher(path, exclude);
       let entries;
       try {
         entries = await readdir(path);
@@ -76,8 +78,21 @@ async function expandInputs(paths: string[]): Promise<string[]> {
         const msg = err instanceof Error ? err.message : String(err);
         throw new UsageError(`Cannot read directory ${path}: ${msg}`);
       }
-      const candidates = entries
-        .filter((name) => !name.startsWith("."))
+      const filteredEntries: string[] = [];
+      for (const name of entries) {
+        if (name.startsWith(".")) continue;
+        const fullPath = join(path, name);
+        const rel = relative(path, fullPath);
+        try {
+          const st = await stat(fullPath);
+          if (!matcher.shouldIgnore(rel, st.isDirectory())) {
+            filteredEntries.push(name);
+          }
+        } catch {
+          // Skip unreadable entries
+        }
+      }
+      const candidates = filteredEntries
         .map((name) => join(path, name))
         .sort();
       let added = 0;
@@ -135,7 +150,7 @@ async function readInput(
     return { text, source: "stdin", sources: ["stdin"] };
   }
 
-  const files = await expandInputs(args.files);
+  const files = await expandInputs(args.files, args.exclude);
   const chunks: string[] = [];
   for (const file of files) {
     try {

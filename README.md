@@ -132,6 +132,7 @@ context-diet [file|dir ...] [options]
 | `--redact` | Scrub common secret shapes → `[redacted]` (before diet heuristics) |
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
+| `--exclude <glob>` | Skip files matching glob pattern (repeatable; dirs only) |
 | `--demo` | Diet bundled `examples/noisy.txt` |
 | `--json` | JSON report on stdout |
 | `--dry-run` | Report only; no body / no `-o` write |
@@ -146,6 +147,21 @@ Default I/O stays pipe-friendly:
 
 ```bash
 pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
+```
+
+### Directory scanning
+
+When scanning directories, `context-diet` automatically skips:
+
+- `node_modules/` and `.git/` (always)
+- Patterns from `.gitignore` (when found in project root or nearest git root)
+- Custom patterns via `--exclude <glob>` (repeatable)
+
+Examples:
+
+```bash
+context-diet src/ --exclude '*.tmp' --exclude 'test-*'
+context-diet . --max-tokens 2000
 ```
 
 ### Optional LLM pass
@@ -333,6 +349,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `--redact` | 擦除常见密钥形态 → `[redacted]`（在饮食启发式之前） |
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
+| `--exclude <glob>` | 跳过匹配 glob 模式的文件（可重复；仅目录） |
 | `--demo` | 对包内 `examples/noisy.txt` 瘦身 |
 | `--json` | stdout 输出 JSON 报告 |
 | `--dry-run` | 只报告，不写正文 |
@@ -346,6 +363,21 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 
 ```bash
 pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
+```
+
+### 目录扫描
+
+扫描目录时，`context-diet` 自动跳过：
+
+- `node_modules/` 和 `.git/`（始终）
+- `.gitignore` 中的模式（在项目根或最近的 git 根找到时）
+- 通过 `--exclude <glob>` 自定义模式（可重复）
+
+示例：
+
+```bash
+context-diet src/ --exclude '*.tmp' --exclude 'test-*'
+context-diet . --max-tokens 2000
 ```
 
 ### 可选 LLM 二次压缩
