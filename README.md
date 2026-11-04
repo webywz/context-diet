@@ -133,6 +133,8 @@ context-diet [file|dir ...] [options]
 | `--keep <cats>` | Prefer `headings`, `code`, `lists` when truncating (comma or `\|`) |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
 | `--exclude <glob>` | Skip files matching glob pattern (repeatable; dirs only) |
+| `--include <glob>` | Only keep paths matching at least one glob (repeatable; dirs only) |
+| `--max-files <n>` | Fail (exit `3`) when a dir scan would process **>** n files after filters |
 | `--demo` | Diet bundled `examples/noisy.txt` |
 | `--json` | JSON report on stdout |
 | `--dry-run` | Report only; no body / no `-o` write |
@@ -157,11 +159,18 @@ When scanning directories, `context-diet` automatically skips:
 - Patterns from `.gitignore` (when found in project root or nearest git root)
 - Custom patterns via `--exclude <glob>` (repeatable)
 
-Examples:
+You can also filter with include patterns (only files matching at least one `--include` glob are kept):
 
 ```bash
+context-diet src/ --include '*.ts' --include '*.js'
 context-diet src/ --exclude '*.tmp' --exclude 'test-*'
 context-diet . --max-tokens 2000
+```
+
+For safety, use `--max-files <n>` to prevent processing too many files:
+
+```bash
+context-diet docs/ --max-files 100  # exits 3 if > 100 files after filters
 ```
 
 ### Optional LLM pass
@@ -212,6 +221,7 @@ estimateTokens(text);
 | `0` | Success |
 | `1` | Usage / missing input / unreadable file / `--fail-over-tokens` exceeded / `--tap` not-ok |
 | `2` | `--deepen` failed (no key, HTTP error) |
+| `3` | `--max-files` limit exceeded |
 
 ### Develop
 
@@ -350,6 +360,8 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `--keep <cats>` | 截断时优先保留 `headings` / `code` / `lists` |
 | `--preset <name>` | `logs` \| `email` \| `chat` \| `html` \| `code` \| `json` |
 | `--exclude <glob>` | 跳过匹配 glob 模式的文件（可重复；仅目录） |
+| `--include <glob>` | 仅保留匹配至少一个 glob 的路径（可重复；仅目录） |
+| `--max-files <n>` | 当目录扫描过滤后将处理 **>** n 个文件时失败（退出码 `3`） |
 | `--demo` | 对包内 `examples/noisy.txt` 瘦身 |
 | `--json` | stdout 输出 JSON 报告 |
 | `--dry-run` | 只报告，不写正文 |
@@ -373,11 +385,18 @@ pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
 - `.gitignore` 中的模式（在项目根或最近的 git 根找到时）
 - 通过 `--exclude <glob>` 自定义模式（可重复）
 
-示例：
+也可以用 include 模式过滤（仅保留匹配至少一个 `--include` glob 的文件）：
 
 ```bash
+context-diet src/ --include '*.ts' --include '*.js'
 context-diet src/ --exclude '*.tmp' --exclude 'test-*'
 context-diet . --max-tokens 2000
+```
+
+为安全起见，使用 `--max-files <n>` 防止处理过多文件：
+
+```bash
+context-diet docs/ --max-files 100  # 过滤后 > 100 个文件时退出码 3
 ```
 
 ### 可选 LLM 二次压缩
@@ -398,6 +417,7 @@ context-diet chapter.md --deepen --max-tokens 1200
 | `0` | 成功 |
 | `1` | 用法错误 / 缺输入 / 文件不可读 / `--fail-over-tokens` 超限 / `--tap` not-ok |
 | `2` | `--deepen` 失败（无 key、HTTP 错误） |
+| `3` | `--max-files` 超限 |
 
 ### 链接
 

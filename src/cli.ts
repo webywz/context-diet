@@ -58,7 +58,19 @@ function readStream(stream: NodeJS.ReadableStream): Promise<string> {
   });
 }
 
-async function expandInputs(paths: string[], exclude: string[]): Promise<string[]> {
+export class MaxFilesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MaxFilesError";
+  }
+}
+
+async function expandInputs(
+  paths: string[],
+  exclude: string[],
+  include: string[],
+  maxFiles?: number,
+): Promise<string[]> {
   const out: string[] = [];
   for (const path of paths) {
     // Virtual test FS / missing paths: treat as files; io.readFile surfaces errors.
@@ -70,7 +82,7 @@ async function expandInputs(paths: string[], exclude: string[]): Promise<string[
       isDir = false;
     }
     if (isDir) {
-      const matcher = await createIgnoreMatcher(path, exclude);
+      const matcher = await createIgnoreMatcher(path, exclude, include);
       let entries;
       try {
         entries = await readdir(path);
@@ -85,7 +97,7 @@ async function expandInputs(paths: string[], exclude: string[]): Promise<string[
         const rel = relative(path, fullPath);
         try {
           const st = await stat(fullPath);
-          if (!matcher.shouldIgnore(rel, st.isDirectory())) {
+          if (!matcher.shouldIgnore(rel, st.isDirectory()) && matcher.shouldInclude(rel)) {
             filteredEntries.push(name);
           }
         } catch {
@@ -116,6 +128,11 @@ async function expandInputs(paths: string[], exclude: string[]): Promise<string[
   }
   if (out.length === 0) {
     throw new UsageError("No input files found");
+  }
+  if (maxFiles !== undefined && out.length > maxFiles) {
+    throw new MaxFilesError(
+      `Directory scan would process ${out.length} files, exceeding --max-files ${maxFiles}`,
+    );
   }
   return out;
 }
@@ -150,7 +167,7 @@ async function readInput(
     return { text, source: "stdin", sources: ["stdin"] };
   }
 
-  const files = await expandInputs(args.files, args.exclude);
+  const files = await expandInputs(args.files, args.exclude, args.include, args.maxFiles);
   const chunks: string[] = [];
   for (const file of files) {
     try {
@@ -214,6 +231,10 @@ export async function run(argv: string[], io: Io = defaultIo()): Promise<number>
     if (err instanceof UsageError) {
       await writeOut(io.stderr, `${err.message}\n`);
       return 1;
+    }
+    if (err instanceof MaxFilesError) {
+      await writeOut(io.stderr, `${err.message}\n`);
+      return 3;
     }
     throw err;
   }

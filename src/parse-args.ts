@@ -30,6 +30,10 @@ export interface CliArgs {
   html?: string;
   /** Additional glob patterns to exclude when scanning directories. */
   exclude: string[];
+  /** Only include files matching at least one of these glob patterns (repeatable; dirs only). */
+  include: string[];
+  /** Fail when a directory scan would process more than N files after filters. */
+  maxFiles?: number;
 }
 
 export class UsageError extends Error {
@@ -110,6 +114,8 @@ Options:
       --preset <name>       logs | email | chat | html | code | json
                             (sets keep defaults + extra strippers)
       --exclude <glob>      Skip files matching glob pattern (repeatable; dirs only)
+      --include <glob>      Only keep paths matching at least one glob (repeatable; dirs only)
+      --max-files <n>       Fail (exit 3) when a dir scan would process > n files after filters
       --demo                Diet the bundled examples/noisy.txt (no clone needed)
       --json                Print a machine-readable report (includes text)
       --dry-run             Report only; do not emit slimmed body / -o
@@ -146,6 +152,7 @@ export function parseArgs(argv: string[]): CliArgs {
     files: [],
     keep: [],
     exclude: [],
+    include: [],
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -295,6 +302,24 @@ export function parseArgs(argv: string[]): CliArgs {
         : undefined;
       const got = takeValue(argv, i + 1, "--exclude", inline);
       args.exclude.push(got.value);
+      i = got.next - 1;
+      continue;
+    }
+    if (a === "--include" || a.startsWith("--include=")) {
+      const inline = a.startsWith("--include=")
+        ? a.slice("--include=".length)
+        : undefined;
+      const got = takeValue(argv, i + 1, "--include", inline);
+      args.include.push(got.value);
+      i = got.next - 1;
+      continue;
+    }
+    if (a === "--max-files" || a.startsWith("--max-files=")) {
+      const inline = a.startsWith("--max-files=")
+        ? a.slice("--max-files=".length)
+        : undefined;
+      const got = takeValue(argv, i + 1, "--max-files", inline);
+      args.maxFiles = parsePositiveInt("--max-files", got.value);
       i = got.next - 1;
       continue;
     }

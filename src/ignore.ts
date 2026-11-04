@@ -3,6 +3,7 @@ import { join, sep, parse } from "node:path";
 
 export interface IgnoreMatcher {
   shouldIgnore(relativePath: string, isDirectory: boolean): boolean;
+  shouldInclude(relativePath: string): boolean;
 }
 
 function globToRegex(pattern: string): RegExp {
@@ -58,9 +59,11 @@ class GitignoreMatcher implements IgnoreMatcher {
   private patterns: Array<{ pattern: string; negated: boolean; dirOnly: boolean }> = [];
   private defaultIgnores = ["node_modules", ".git"];
   private customExcludes: string[];
+  private customIncludes: string[];
 
-  constructor(gitignoreContent: string | null, customExcludes: string[]) {
+  constructor(gitignoreContent: string | null, customExcludes: string[], customIncludes: string[]) {
     this.customExcludes = customExcludes;
+    this.customIncludes = customIncludes;
     
     if (gitignoreContent) {
       const lines = gitignoreContent.split("\n");
@@ -125,11 +128,28 @@ class GitignoreMatcher implements IgnoreMatcher {
 
     return ignored;
   }
+
+  shouldInclude(relativePath: string): boolean {
+    if (this.customIncludes.length === 0) {
+      return true;
+    }
+
+    const normalized = relativePath.split(sep).join("/");
+    
+    for (const include of this.customIncludes) {
+      if (matchPattern(include, normalized)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 }
 
 export async function createIgnoreMatcher(
   dirPath: string,
   customExcludes: string[],
+  customIncludes: string[] = [],
 ): Promise<IgnoreMatcher> {
   let gitignoreContent: string | null = null;
 
@@ -143,7 +163,7 @@ export async function createIgnoreMatcher(
     // .gitignore not found or unreadable; continue without it
   }
 
-  return new GitignoreMatcher(gitignoreContent, customExcludes);
+  return new GitignoreMatcher(gitignoreContent, customExcludes, customIncludes);
 }
 
 async function findGitRoot(startPath: string): Promise<string | null> {
