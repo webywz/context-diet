@@ -48,6 +48,17 @@ describe("parseArgs", () => {
     assert.equal(args.deepen, true);
     assert.equal(args.provider, "anthropic");
   });
+
+  it("defaults recursive off and accepts -R / --recursive", () => {
+    assert.equal(parseArgs(["dir"]).recursive, false);
+    assert.equal(parseArgs(["-R", "dir"]).recursive, true);
+    assert.equal(parseArgs(["--recursive", "dir"]).recursive, true);
+    assert.deepEqual(parseArgs(["--recursive", "dir"]).files, ["dir"]);
+  });
+
+  it("rejects lowercase -r", () => {
+    assert.throws(() => parseArgs(["-r", "dir"]), UsageError);
+  });
 });
 
 describe("parseArgs presets / dry-run / diff", () => {

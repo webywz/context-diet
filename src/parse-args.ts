@@ -34,6 +34,8 @@ export interface CliArgs {
   include: string[];
   /** Fail when a directory scan would process more than N files after filters. */
   maxFiles?: number;
+  /** Include files in nested directories. Default scans top-level files only. */
+  recursive: boolean;
 }
 
 export class UsageError extends Error {
@@ -116,6 +118,7 @@ Options:
       --exclude <glob>      Skip files matching glob pattern (repeatable; dirs only)
       --include <glob>      Only keep paths matching at least one glob (repeatable; dirs only)
       --max-files <n>       Fail (exit 3) when a dir scan would process > n files after filters
+  -R, --recursive           Also include files in nested directories (default: top-level only)
       --demo                Diet the bundled examples/noisy.txt (no clone needed)
       --json                Print a machine-readable report (includes text)
       --dry-run             Report only; do not emit slimmed body / -o
@@ -135,6 +138,10 @@ Token counts are a cl100k-ish heuristic, not a billed tokenizer.
 When scanning directories, node_modules/ and .git/ are always skipped.
 .gitignore patterns (from project root) are also honored.
 Use --exclude for additional custom patterns (e.g. --exclude '*.tmp').
+Directories list top-level files unless -R / --recursive is set.
+Names starting with "." are skipped. Directory symlinks are not followed.
+--include matches the relative path (* does not cross /; use **/*.ts when recursive).
+--max-files counts selected files after filters, including recursive expansion (exit 3).
 `;
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -153,6 +160,7 @@ export function parseArgs(argv: string[]): CliArgs {
     keep: [],
     exclude: [],
     include: [],
+    recursive: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -321,6 +329,10 @@ export function parseArgs(argv: string[]): CliArgs {
       const got = takeValue(argv, i + 1, "--max-files", inline);
       args.maxFiles = parsePositiveInt("--max-files", got.value);
       i = got.next - 1;
+      continue;
+    }
+    if (a === "-R" || a === "--recursive") {
+      args.recursive = true;
       continue;
     }
     if (a === "-") {
