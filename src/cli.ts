@@ -21,9 +21,9 @@ import {
 } from "./report.js";
 import { formatTap } from "./tap.js";
 import { formatSarif } from "./sarif.js";
-import { readdir, stat } from "node:fs/promises";
+import { lstat, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { createIgnoreMatcher } from "./ignore.js";
+import { createIgnoreMatcher, type IgnoreMatcher } from "./ignore.js";
 
 export interface Io {
   stdin: NodeJS.ReadableStream;
@@ -65,16 +65,89 @@ export class MaxFilesError extends Error {
   }
 }
 
+async function listDirFiles(
+  root: string,
+  matcher: IgnoreMatcher,
+  recursive: boolean,
+): Promise<string[]> {
+  const found: string[] = [];
+
+  async function walk(dir: string): Promise<void> {
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch (err) {
+      if (dir === root) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new UsageError(`Cannot read directory ${root}: ${msg}`);
+      }
+      return;
+    }
+
+    for (const name of entries) {
+      if (name.startsWith(".")) continue;
+      const fullPath = join(dir, name);
+      const rel = relative(root, fullPath);
+      let listed;
+      try {
+        listed = await lstat(fullPath);
+      } catch {
+        continue;
+      }
+
+      if (listed.isSymbolicLink()) {
+        // Directory symlinks are not walked: they can loop or leave the tree.
+        // File symlinks are still read, matching top-level stat() behavior.
+        let target;
+        try {
+          target = await stat(fullPath);
+        } catch {
+          continue;
+        }
+        if (target.isDirectory()) continue;
+        if (
+          target.isFile() &&
+          !matcher.shouldIgnore(rel, false) &&
+          matcher.shouldInclude(rel)
+        ) {
+          found.push(fullPath);
+        }
+        continue;
+      }
+
+      if (listed.isDirectory()) {
+        if (matcher.shouldIgnore(rel, true)) continue;
+        if (recursive) await walk(fullPath);
+        continue;
+      }
+
+      if (
+        listed.isFile() &&
+        !matcher.shouldIgnore(rel, false) &&
+        matcher.shouldInclude(rel)
+      ) {
+        found.push(fullPath);
+      }
+    }
+  }
+
+  await walk(root);
+  found.sort();
+  return found;
+}
+
 async function expandInputs(
   paths: string[],
   exclude: string[],
   include: string[],
   maxFiles?: number,
+  recursive = false,
 ): Promise<string[]> {
   const out: string[] = [];
   for (const path of paths) {
     // Virtual test FS / missing paths: treat as files; io.readFile surfaces errors.
-    // Only expand when a real directory exists on disk.
+    // Only expand when a real directory exists on disk. stat() follows a symlink
+    // the user passed explicitly; directory symlinks discovered inside are not.
     let isDir = false;
     try {
       isDir = (await stat(path)).isDirectory();
@@ -83,45 +156,11 @@ async function expandInputs(
     }
     if (isDir) {
       const matcher = await createIgnoreMatcher(path, exclude, include);
-      let entries;
-      try {
-        entries = await readdir(path);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new UsageError(`Cannot read directory ${path}: ${msg}`);
-      }
-      const filteredEntries: string[] = [];
-      for (const name of entries) {
-        if (name.startsWith(".")) continue;
-        const fullPath = join(path, name);
-        const rel = relative(path, fullPath);
-        try {
-          const st = await stat(fullPath);
-          if (!matcher.shouldIgnore(rel, st.isDirectory()) && matcher.shouldInclude(rel)) {
-            filteredEntries.push(name);
-          }
-        } catch {
-          // Skip unreadable entries
-        }
-      }
-      const candidates = filteredEntries
-        .map((name) => join(path, name))
-        .sort();
-      let added = 0;
-      for (const file of candidates) {
-        try {
-          const st = await stat(file);
-          if (st.isFile()) {
-            out.push(file);
-            added += 1;
-          }
-        } catch {
-          // skip unreadable entries
-        }
-      }
-      if (added === 0) {
+      const files = await listDirFiles(path, matcher, recursive);
+      if (files.length === 0) {
         throw new UsageError(`Directory ${path} has no readable files`);
       }
+      out.push(...files);
     } else {
       out.push(path);
     }
@@ -167,7 +206,13 @@ async function readInput(
     return { text, source: "stdin", sources: ["stdin"] };
   }
 
-  const files = await expandInputs(args.files, args.exclude, args.include, args.maxFiles);
+  const files = await expandInputs(
+    args.files,
+    args.exclude,
+    args.include,
+    args.maxFiles,
+    args.recursive,
+  );
   const chunks: string[] = [];
   for (const file of files) {
     try {

@@ -49,7 +49,7 @@ cut:
 | **Bundled examples** | `--demo` / `examples/noisy.txt` in the published tarball |
 | **Optional deepen** | `--deepen` LLM second pass only when you opt in with a key |
 | **HTML report** | `--html <path>` writes a self-contained before/after report (offline, no CDN) |
-| **Multi-file / dirs** | Pass several files or directories; they share one `--max-tokens` / `--fail-over-tokens` budget (`budget.shared`, `sources[]`) |
+| **Multi-file / dirs** | Pass several files or directories; they share one `--max-tokens` / `--fail-over-tokens` budget (`budget.shared`, `sources[]`). Directories stay top-level unless `-R` / `--recursive` |
 | **Step summary** | `--github-summary` appends a short diet report to `$GITHUB_STEP_SUMMARY` |
 
 ### Install
@@ -122,7 +122,7 @@ context-diet [file|dir ...] [options]
 
 | Flag | Meaning |
 | --- | --- |
-| `[file\|dir ...]` | One or more paths; dirs expand top-level files; omit or `-` for stdin. Multi-input shares one token budget |
+| `[file\|dir ...]` | One or more paths; dirs expand to top-level files unless `--recursive`; omit or `-` for stdin. Multi-input shares one token budget |
 | `-o, --output <file>` | Write slimmed text here instead of stdout |
 | `--html <path>` | Write self-contained HTML report (stats + capped previews) |
 | `--max-tokens <n>` | Cap estimated output tokens (truncates; **shared** across files/dirs) |
@@ -135,6 +135,7 @@ context-diet [file|dir ...] [options]
 | `--exclude <glob>` | Skip files matching glob pattern (repeatable; dirs only) |
 | `--include <glob>` | Only keep paths matching at least one glob (repeatable; dirs only) |
 | `--max-files <n>` | Fail (exit `3`) when a dir scan would process **>** n files after filters |
+| `-R, --recursive` | Also include files in nested directories. Default stays top-level only. Does not follow directory symlinks |
 | `--demo` | Diet bundled `examples/noisy.txt` |
 | `--json` | JSON report on stdout |
 | `--dry-run` | Report only; no body / no `-o` write |
@@ -153,24 +154,29 @@ pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
 
 ### Directory scanning
 
+Directories expand to **top-level files** unless you pass `-R` or `--recursive`. Recursive mode also selects files in nested directories. It does not follow directory symlinks, so a link cannot loop or walk outside the tree. Names starting with `.` are skipped at every level.
+
 When scanning directories, `context-diet` automatically skips:
 
 - `node_modules/` and `.git/` (always)
 - Patterns from `.gitignore` (when found in project root or nearest git root)
 - Custom patterns via `--exclude <glob>` (repeatable)
+- Hidden names (prefix `.`)
 
-You can also filter with include patterns (only files matching at least one `--include` glob are kept):
+You can also filter with include patterns (only files matching at least one `--include` glob are kept). Globs match the path relative to the directory you passed, and `*` does not cross `/`. `--exclude '*.tmp'` also matches that pattern against any single path segment, so it skips nested `*.tmp` files. `--include '*.ts'` matches only a top-level `*.ts` path; with `--recursive`, use `**/*.ts` to keep nested TypeScript files.
 
 ```bash
 context-diet src/ --include '*.ts' --include '*.js'
 context-diet src/ --exclude '*.tmp' --exclude 'test-*'
 context-diet . --max-tokens 2000
+context-diet src/ --recursive --include '**/*.ts' --max-files 100
 ```
 
-For safety, use `--max-files <n>` to prevent processing too many files:
+For safety, use `--max-files <n>` to prevent processing too many files. The limit is applied after include, exclude, gitignore, and (when set) recursive expansion:
 
 ```bash
-context-diet docs/ --max-files 100  # exits 3 if > 100 files after filters
+context-diet docs/ --max-files 100              # exits 3 if > 100 top-level files
+context-diet docs/ --recursive --max-files 100  # exits 3 if > 100 files after the nested walk
 ```
 
 ### Optional LLM pass
@@ -251,7 +257,7 @@ context-diet --demo --fail-over-tokens 1 --sarif over.sarif
 ```
 
 - Multiple files/dirs share one `--max-tokens` / `--fail-over-tokens` budget (JSON `budget.shared`, `budget.maxTokens`, `sources[]`).
-- Directories expand to top-level files (non-recursive).
+- Directories expand to top-level files unless `-R` / `--recursive` is set. `--max-files` applies after that selection (exit `3`). Directory symlinks are not followed.
 - `--fail-over-tokens` gates the **combined** dieted output, not each file alone.
 - `--sarif <path>` writes SARIF 2.1.0 when output exceeds `--fail-over-tokens`.
 
@@ -260,7 +266,7 @@ context-diet --demo --fail-over-tokens 1 --sarif over.sarif
 
 ### 多文件共享预算 + SARIF（0.9 / 0.10）
 
-详见上文 **功能** 与 **快速开始**。可传多个文件/目录，共享 `--max-tokens` / `--fail-over-tokens`（闸门看**合并后**输出）；JSON 含 `budget.shared`、`sources[]`。`--sarif <path>` 在超 `--fail-over-tokens` 时写出 SARIF 2.1.0。
+详见上文 **功能** 与 **快速开始**。可传多个文件/目录，共享 `--max-tokens` / `--fail-over-tokens`（闸门看**合并后**输出）；JSON 含 `budget.shared`、`sources[]`。`--sarif <path>` 在超 `--fail-over-tokens` 时写出 SARIF 2.1.0。目录默认只展开顶层文件；`-R` / `--recursive` 才包含嵌套文件，且不跟随目录符号链接。
 
 
 ### 演示
@@ -284,7 +290,7 @@ npx @webywz/context-diet --demo --preset logs --max-tokens 400
 | **示例随包** | `--demo` / `examples/noisy.txt` 在发布 tarball 里 |
 | **可选 deepen** | `--deepen` 仅在有 key 且你主动开启时走 LLM |
 | **HTML 报告** | `--html <path>`：写出自包含前后对比报告（离线、无 CDN） |
-| **多文件 / 目录** | 可传多个文件或目录，共享一份 `--max-tokens` / `--fail-over-tokens`（`budget.shared`、`sources[]`） |
+| **多文件 / 目录** | 可传多个文件或目录，共享一份 `--max-tokens` / `--fail-over-tokens`（`budget.shared`、`sources[]`）。目录默认只扫顶层，`-R` / `--recursive` 才进入嵌套 |
 | **Step Summary** | `--github-summary`：把精简饮食报告追加到 `$GITHUB_STEP_SUMMARY` |
 
 ### 安装
@@ -349,7 +355,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 
 | 参数 | 含义 |
 | --- | --- |
-| `[file\|dir ...]` | 一个或多个路径；目录展开顶层文件；省略或 `-` 读 stdin。多输入共享一份 token 预算 |
+| `[file\|dir ...]` | 一个或多个路径；目录默认展开顶层文件（`--recursive` 才包含嵌套）；省略或 `-` 读 stdin。多输入共享一份 token 预算 |
 | `-o, --output <file>` | 把瘦身正文写到文件 |
 | `--html <path>` | 写入自包含 HTML 报告（统计 + 截断预览） |
 | `--max-tokens <n>` | 估算输出 token 上限（会截断；**多文件/目录共享**） |
@@ -362,6 +368,7 @@ Token 估算为 **cl100k 近似**（约 4 字符/词，1 个 CJK ≈ 1 token）�
 | `--exclude <glob>` | 跳过匹配 glob 模式的文件（可重复；仅目录） |
 | `--include <glob>` | 仅保留匹配至少一个 glob 的路径（可重复；仅目录） |
 | `--max-files <n>` | 当目录扫描过滤后将处理 **>** n 个文件时失败（退出码 `3`） |
+| `-R, --recursive` | 同时纳入嵌套目录中的文件。默认仍只扫描顶层。不跟随目录符号链接 |
 | `--demo` | 对包内 `examples/noisy.txt` 瘦身 |
 | `--json` | stdout 输出 JSON 报告 |
 | `--dry-run` | 只报告，不写正文 |
@@ -379,24 +386,29 @@ pbpaste | context-diet --preset chat --max-tokens 800 | pbcopy
 
 ### 目录扫描
 
+目录默认只展开**顶层文件**。传入 `-R` 或 `--recursive` 后，才会纳入嵌套目录中的文件。递归不会跟随目录符号链接，因此不会因链接成环，也不会顺着链接走出当前目录树。每一层以 `.` 开头的名字都会跳过。
+
 扫描目录时，`context-diet` 自动跳过：
 
 - `node_modules/` 和 `.git/`（始终）
 - `.gitignore` 中的模式（在项目根或最近的 git 根找到时）
 - 通过 `--exclude <glob>` 自定义模式（可重复）
+- 以 `.` 开头的隐藏名字
 
-也可以用 include 模式过滤（仅保留匹配至少一个 `--include` glob 的文件）：
+也可以用 include 模式过滤（仅保留匹配至少一个 `--include` glob 的文件）。glob 匹配的是相对于所给目录的路径，`*` 不跨越 `/`。`--exclude '*.tmp'` 还会用该模式匹配任意单个路径段，因此会跳过嵌套的 `*.tmp`。`--include '*.ts'` 只匹配顶层的 `*.ts`；在 `--recursive` 下要用 `**/*.ts` 才能选中嵌套的 TypeScript 文件。
 
 ```bash
 context-diet src/ --include '*.ts' --include '*.js'
 context-diet src/ --exclude '*.tmp' --exclude 'test-*'
 context-diet . --max-tokens 2000
+context-diet src/ --recursive --include '**/*.ts' --max-files 100
 ```
 
-为安全起见，使用 `--max-files <n>` 防止处理过多文件：
+为安全起见，使用 `--max-files <n>` 防止处理过多文件。计数发生在 include、exclude、gitignore 以及（若开启）递归展开之后：
 
 ```bash
-context-diet docs/ --max-files 100  # 过滤后 > 100 个文件时退出码 3
+context-diet docs/ --max-files 100              # 顶层文件 > 100 时退出码 3
+context-diet docs/ --recursive --max-files 100  # 嵌套展开后 > 100 时退出码 3
 ```
 
 ### 可选 LLM 二次压缩
